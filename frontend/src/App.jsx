@@ -4,6 +4,13 @@ import { useState, useRef, useEffect, useCallback } from "react"
 // (Có thể ghi đè bằng window.MEDIFLOW_API_URL trong index.html mà không cần sửa file này.)
 const API_URL = (typeof window !== "undefined" && window.MEDIFLOW_API_URL) || "https://mediflow-ai-8zhx.onrender.com"
 
+// ASSET_BASE: thư mục gốc trang web lúc chạy. Trên GitHub Pages là "/mediflow-ai/",
+// chạy local là "/". Tự tính nên ảnh logo trỏ đúng dù deploy ở subpath nào.
+// (Không dùng import.meta để tránh lỗi "import.meta outside a module" ở môi trường preview.)
+const ASSET_BASE = (typeof window !== "undefined" && window.MEDIFLOW_BASE)
+  || (typeof window !== "undefined" ? window.location.pathname.replace(/[^/]*$/, "") : "/")
+const asset = (p) => ASSET_BASE + String(p).replace(/^\/+/, "")
+
 // ─── CSS ──────────────────────────────────────────────────────────────────────
 const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap');
@@ -1908,12 +1915,12 @@ async function countPdfPages(file) {
 }
 
 // ─── LOGO ĐỐI TÁC / ĐƠN VỊ ─────────────────────────────────────────────────────
-// Đặt file ảnh vào thư mục public/logos/ với đúng tên bên dưới, ảnh sẽ tự hiển thị.
+// Đặt file ảnh vào thư mục public/logos/ với đúng tên bên dưới (khớp tên file thật).
 const PARTNER_GROUPS = [
-  { label:"Cuộc thi",            logos:[{ src:"/logos/hackaithon.png", alt:"HackAIthon 2026" }] },
-  { label:"Đơn vị tổ chức",      logos:[{ src:"/logos/hoi-sinh-vien.png", alt:"Hội Sinh viên Việt Nam" }, { src:"/logos/vietcombank.png", alt:"Vietcombank" }] },
-  { label:"Bảo trợ chuyên môn",  logos:[{ src:"/logos/vnpt-ai.png", alt:"VNPT AI" }] },
-  { label:"Đơn vị thực hiện",    logos:[{ src:"/logos/vsds.png", alt:"VSDS" }] },
+  { label:"Cuộc thi",            logos:[{ file:"hackaithon.png", alt:"HackAIthon 2026" }] },
+  { label:"Đơn vị tổ chức",      logos:[{ file:"hoi-sinh-vien.png", alt:"Hội Sinh viên Việt Nam" }, { file:"vietcombank.png", alt:"Vietcombank" }] },
+  { label:"Bảo trợ chuyên môn",  logos:[{ file:"vnpt_ai.png", alt:"VNPT AI" }] },
+  { label:"Đơn vị thực hiện",    logos:[{ file:"vsds.png", alt:"VSDS" }] },
 ]
 function LogoBar({ compact }) {
   return (
@@ -1924,7 +1931,7 @@ function LogoBar({ compact }) {
           <div className="logo-group-imgs">
             {g.logos.map((l,j)=>(
               <div key={j} className="logo-slot" title={l.alt}>
-                <img src={l.src} alt={l.alt} className="partner-logo" onError={e=>{e.currentTarget.classList.add("hide")}}/>
+                <img src={asset("logos/"+l.file)} alt={l.alt} className="partner-logo" onError={e=>{e.currentTarget.classList.add("hide")}}/>
                 <span className="logo-ph">{l.alt}</span>
               </div>
             ))}
