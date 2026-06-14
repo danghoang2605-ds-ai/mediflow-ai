@@ -126,14 +126,14 @@ const CSS = `
   .fp-body{flex:1;background:#475569;display:flex;align-items:center;justify-content:center;overflow:auto}
   .fp-frame{width:100%;height:100%;border:none;background:#fff}
   .fp-img{max-width:100%;max-height:100%;object-fit:contain}
-  .logo-bar{display:flex;flex-wrap:wrap;justify-content:center;gap:40px;margin-top:36px;padding:28px 18px 10px;border-top:1px solid rgba(200,220,255,0.5)}
-  .logo-bar.compact{margin-top:22px;padding-top:20px;gap:32px}
-  .logo-group{display:flex;flex-direction:column;align-items:center;gap:12px}
-  .logo-group-lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#94A3B8}
-  .logo-group-imgs{display:flex;align-items:center;gap:22px}
-  .logo-slot{position:relative;height:92px;min-width:120px;display:flex;align-items:center;justify-content:center}
-  .logo-bar.compact .logo-slot{height:76px;min-width:104px}
-  .partner-logo{max-height:100%;max-width:240px;object-fit:contain;position:relative;z-index:1}
+  .logo-bar{display:flex;flex-wrap:wrap;justify-content:center;align-items:flex-start;gap:30px 44px;max-width:1080px;margin:36px auto 0;padding:26px 18px 12px;border-top:1px solid rgba(200,220,255,0.5)}
+  .logo-bar.compact{margin-top:22px;padding-top:20px;gap:24px 40px}
+  .logo-group{display:flex;flex-direction:column;align-items:center;gap:13px}
+  .logo-group-lbl{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--navy2);white-space:nowrap}
+  .logo-group-imgs{display:flex;align-items:center;gap:20px}
+  .logo-slot{position:relative;height:56px;min-width:84px;display:flex;align-items:center;justify-content:center}
+  .logo-bar.compact .logo-slot{height:50px;min-width:76px}
+  .partner-logo{max-height:100%;max-width:150px;object-fit:contain;position:relative;z-index:1}
   .partner-logo.hide{display:none}
   .partner-logo.hide + .logo-ph{display:flex}
   .logo-ph{display:none;align-items:center;justify-content:center;text-align:center;font-size:11px;color:#94A3B8;border:1px dashed #CBD5E1;border-radius:10px;padding:6px 12px;height:100%;width:100%;line-height:1.3}
