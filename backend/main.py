@@ -4,6 +4,7 @@ Chạy: uvicorn main:app --reload --port 8000
 """
 import os
 import json
+import re
 import tempfile
 # Nạp biến môi trường từ file .env nếu có (an toàn nếu chưa cài python-dotenv)
 try:
@@ -231,10 +232,10 @@ MIN_CHARS_PER_PAGE = 40
 # Tổng ký tự tối thiểu để coi cả file là text PDF (đọc được)
 MIN_TOTAL_CHARS = 200
 # ─── Giới hạn để phân tích xong trong thời gian chờ (tránh timeout) ───────────
-# Hồ sơ rất dày chỉ đọc phần đầu (kèm ghi chú). Cắt vừa phải để Claude sinh JSON
-# nhanh, tránh vượt thời gian chờ của trình duyệt và proxy.
-MAX_PAGES = 60
-MAX_TEXT_CHARS = 80_000
+# Đường gửi chữ (/analyze_text) không còn nghẽn upload, nên nới rộng để hồ sơ dày
+# đi được nhiều hơn. Vẫn cắt để Claude sinh JSON không quá lâu.
+MAX_PAGES = 120
+MAX_TEXT_CHARS = 120_000
 
 
 def extract_text_from_pdf(pdf_path: str) -> dict:
@@ -322,40 +323,119 @@ def health():
     }
 
 
-@app.post("/analyze")
-async def analyze_record(file: UploadFile = File(...)):
+import unicodedata
+
+def _strip_accents(s: str) -> str:
+    """Bỏ dấu tiếng Việt + viết thường, để khớp từ khóa bất kể có dấu hay không."""
+    return "".join(
+        c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn"
+    ).lower()
+
+# Từ khóa tín hiệu lâm sàng (đã bỏ dấu, chữ thường). Mỗi từ khóa khác nhau trên
+# một trang cộng 1 điểm. Tấn và Ngân có thể bổ sung danh sách này.
+STRONG_KEYWORDS = [
+    # tóm tắt / chẩn đoán / diễn biến / ra vào viện
+    "chan doan", "tom tat", "benh su", "tien su", "dien bien", "qua trinh benh",
+    "vao vien", "nhap vien", "ra vien", "xuat vien", "ket luan", "huong dieu tri",
+    "phau thuat", "thu thuat", "tuong trinh",
+    # cận lâm sàng
+    "sieu am", "xet nghiem", "x quang", "x-quang", "cat lop", "cong huong tu",
+    "dien tim", "ecg", "phan suat tong mau", "lvef",
+    # chỉ số xét nghiệm
+    "crp", "inr", "probnp", "bnp", "troponin", "creatinin", "egfr", "ure",
+    "natri", "kali", "clo", "glucose", "hba1c", "bach cau", "tieu cau",
+    "huyet sac to", "ast", "alt", "bilirubin", "dong mau", "aptt", "d-dimer",
+    # thuốc
+    "don thuoc", "y lenh", "lieu dung", "khang sinh", "chong dong",
+    # tim mạch (bối cảnh ca van tim)
+    "van dong mach", "van hai la", "van dmc", "tran dich", "mang ngoai tim",
+    "suy tim", "hep van", "ho van", "ep tim",
+]
+
+def _split_pages(text: str):
+    """Tách hồ sơ thành danh sách trang dựa trên marker 'TRANG <số>'.
+    Nhận cả 2 dạng marker: '==== TRANG 5 ====' (client) và viền '=' nhiều dòng (server)."""
+    header_re = re.compile(r"^\s*=*\s*TRANG\s+\d+\s*=*\s*$", re.IGNORECASE)
+    eq_re = re.compile(r"^\s*=+\s*$")
+    pages, cur = [], []
+    for ln in text.split("\n"):
+        if header_re.match(ln):
+            if cur:
+                pages.append("\n".join(cur).strip())
+            cur = [ln]
+        elif eq_re.match(ln):
+            continue  # dòng viền '=' của marker, bỏ khỏi nội dung
+        else:
+            cur.append(ln)
+    if cur:
+        pages.append("\n".join(cur).strip())
+    return [p for p in pages if p.strip()]
+
+def _page_score(page_text: str) -> int:
+    t = _strip_accents(page_text)
+    return sum(1 for kw in STRONG_KEYWORDS if kw in t)
+
+def select_relevant_text(full_text: str, budget: int):
     """
-    Upload PDF hồ sơ → trả về báo cáo JSON có cấu trúc
+    Hồ sơ nhỏ (<= budget): giữ nguyên.
+    Hồ sơ lớn: luôn giữ vài trang đầu (tóm tắt, chẩn đoán) và cuối (ra viện),
+    rồi chọn thêm các trang có tín hiệu lâm sàng cao nhất cho tới khi đầy budget,
+    cuối cùng SẮP LẠI theo thứ tự trang gốc để giữ đúng dòng thời gian.
+    Trả về (text_đã_lọc, meta).
     """
-    if not file.filename.endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Chỉ chấp nhận file PDF")
-    
-    # Save to temp
-    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-        content = await file.read()
-        tmp.write(content)
-        tmp_path = tmp.name
-    
+    pages = _split_pages(full_text)
+    if not pages:
+        return full_text[:budget], {"filtered": False, "pages_total": 0, "pages_kept": 0}
+
+    n = len(pages)
+    if len("\n\n".join(pages)) <= budget:
+        return full_text, {"filtered": False, "pages_total": n, "pages_kept": n}
+
+    HEAD, TAIL = 6, 4  # luôn giữ trang đầu/cuối (thường là tóm tắt và giấy ra viện)
+    always = set(range(min(HEAD, n))) | set(range(max(0, n - TAIL), n))
+    selected = set(always)
+    acc = sum(len(pages[i]) + 2 for i in selected)
+
+    # Thêm trang điểm cao nhất cho tới khi gần đầy budget
+    for i in sorted(range(n), key=lambda k: _page_score(pages[k]), reverse=True):
+        if i in selected or _page_score(pages[i]) <= 0:
+            continue
+        need = len(pages[i]) + 2
+        if acc + need > budget:
+            continue
+        selected.add(i)
+        acc += need
+
+    kept = sorted(selected)
+    out = "\n\n".join(pages[i] for i in kept)
+    if len(out) > budget:
+        out = out[:budget]
+    return out, {"filtered": True, "pages_total": n, "pages_kept": len(kept)}
+
+
+def run_analysis_pipeline(ho_so_text: str, pages: int = 0,
+                          method: str = "text", ocr_pages=None) -> JSONResponse:
+    """
+    Chạy Bước 1-3 từ TEXT hồ sơ đã có (không đụng tới file PDF).
+    Dùng chung cho cả /analyze (bóc text ở server) và /analyze_text (text gửi từ client).
+    """
+    if ocr_pages is None:
+        ocr_pages = []
+
+    # Hồ sơ rất dày: lọc giữ trang có nội dung lâm sàng thay vì cắt cụt phần đầu.
+    ho_so_text, filter_meta = select_relevant_text(ho_so_text, MAX_TEXT_CHARS)
+
+    if len(ho_so_text.strip()) < MIN_TOTAL_CHARS:
+        return JSONResponse({
+            "success": False,
+            "error": "Không có đủ nội dung text để phân tích. File có thể là bản scan "
+                     "(ảnh chụp) không có lớp text. Hãy dùng bản PDF xuất trực tiếp từ HIS.",
+            "meta": {"pages": pages, "method": method},
+        }, status_code=422)
+
+    raw = ""
     try:
-        # Step 1: Trích xuất text (ưu tiên text layer, OCR chỉ cho trang scan)
-        extracted = extract_text_from_pdf(tmp_path)
-        ho_so_text = extracted["text"]
-
-        if extracted["total_chars"] < MIN_TOTAL_CHARS:
-            return JSONResponse({
-                "success": False,
-                "error": "Không trích xuất được nội dung text từ PDF. File có thể là bản scan "
-                         "(ảnh chụp) không có lớp text. Hãy dùng bản PDF xuất trực tiếp từ HIS "
-                         "(dạng text), hoặc chuyển bản scan sang PDF có text trước khi tải lên.",
-                "meta": {
-                    "pages": extracted["pages"],
-                    "method": extracted["method"],
-                }
-            }, status_code=422)
-
         # ─── BƯỚC 1 (LLM Extraction): Claude đọc -> JSON thuần, KHÔNG đánh giá ───
-        # Haiku 4.5 cho tối đa 64000 token đầu ra. Đặt 16000 để hồ sơ dài
-        # (kể cả 200 trang) không bị cắt giữa JSON. Tăng tiếp nếu vẫn thiếu.
         raw = call_claude(
             system=REPORT_SYSTEM,
             user_message=f"Hồ sơ bệnh nhân:\n\n{ho_so_text}",
@@ -376,7 +456,6 @@ async def analyze_record(file: UploadFile = File(...)):
         try:
             report = json.loads(json_text)
         except json.JSONDecodeError:
-            # Thường do JSON bị cắt vì hồ sơ quá dài. Báo lỗi rõ thay vì chung chung.
             return JSONResponse({
                 "success": False,
                 "error": "Hồ sơ quá dài nên kết quả AI bị cắt, chưa tạo được JSON hoàn chỉnh. "
@@ -399,35 +478,74 @@ async def analyze_record(file: UploadFile = File(...)):
             except Exception:
                 trend_summary = ""
 
-        # Trả về report (Bước 1) + kết quả rule engine (Bước 2) + diễn tiến (Bước 3)
         return JSONResponse({
             "success": True,
             "report": report,
             "ho_so_text": ho_so_text,  # Dùng cho chatbot
-            "analysis": {                      # Kết quả rule engine (deterministic)
+            "analysis": {
                 "egfr": engine["egfr"],
                 "egfr_detail": engine.get("egfr_detail"),
                 "priority_findings": engine["priority_findings"],
                 "drug_safety": engine["drug_safety"],
-                "trend_summary": trend_summary,  # Bước 3 (AI diễn đạt)
+                "trend_summary": trend_summary,
             },
-            "meta": {
-                "pages": extracted["pages"],
-                "method": extracted["method"],   # "text" | "ocr" | "hybrid"
-                "ocr_pages": extracted["ocr_pages"],
-            }
+            "meta": {"pages": pages, "method": method, "ocr_pages": ocr_pages,
+                     "filtered": filter_meta.get("filtered", False),
+                     "pages_total": filter_meta.get("pages_total", 0),
+                     "pages_kept": filter_meta.get("pages_kept", 0)},
         })
-    
+
     except json.JSONDecodeError:
         return JSONResponse({
             "success": False,
             "error": "Không thể parse kết quả AI",
-            "raw": raw[:500]
+            "raw": raw[:500],
         }, status_code=500)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/analyze")
+async def analyze_record(file: UploadFile = File(...)):
+    """
+    Upload PDF hồ sơ → bóc text ở server (pypdf) → phân tích.
+    Phù hợp file nhỏ. File lớn nên dùng /analyze_text (bóc chữ ở trình duyệt).
+    """
+    if not file.filename.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Chỉ chấp nhận file PDF")
+
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        extracted = extract_text_from_pdf(tmp_path)
+        return run_analysis_pipeline(
+            extracted["text"],
+            pages=extracted["pages"],
+            method=extracted["method"],
+            ocr_pages=extracted["ocr_pages"],
+        )
     finally:
         os.unlink(tmp_path)
+
+
+class AnalyzeTextRequest(BaseModel):
+    ho_so_text: str
+    pages: int = 0
+
+
+@app.post("/analyze_text")
+async def analyze_text(req: AnalyzeTextRequest):
+    """
+    Nhận TEXT hồ sơ (đã bóc ở trình duyệt) → phân tích.
+    Dành cho file lớn: chỉ gửi vài trăm KB chữ thay vì cả file nặng, nên không bị
+    nghẽn ở giới hạn dung lượng upload của proxy.
+    """
+    return run_analysis_pipeline(req.ho_so_text, pages=req.pages, method="client_text")
 
 
 class ChatRequest(BaseModel):
