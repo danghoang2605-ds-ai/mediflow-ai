@@ -6,6 +6,49 @@ import { useState, useRef, useEffect, useCallback } from "react"
 // Có thể ghi đè bằng window.MEDIFLOW_API_URL trong index.html mà không cần sửa file này.
 const API_URL = (typeof window !== "undefined" && window.MEDIFLOW_API_URL) || "https://danghoang2605-mediflow-ai.hf.space"
 
+// ─── Bóc chữ PDF NGAY TRONG TRÌNH DUYỆT (pdf.js từ CDN) ───────────────────────
+// File lớn (vd 100 trang, 14MB) chỉ chứa vài trăm KB chữ. Bóc chữ ở client rồi
+// gửi mình phần chữ lên server, nên không bị nghẽn ở giới hạn dung lượng upload.
+const PDFJS_VER = "3.11.174"
+let _pdfjsPromise = null
+function ensurePdfJs() {
+  if (typeof window === "undefined") return Promise.reject(new Error("no window"))
+  if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib)
+  if (_pdfjsPromise) return _pdfjsPromise
+  _pdfjsPromise = new Promise((resolve, reject) => {
+    const s = document.createElement("script")
+    s.src = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VER}/pdf.min.js`
+    s.onload = () => {
+      try {
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+          `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VER}/pdf.worker.min.js`
+        resolve(window.pdfjsLib)
+      } catch (e) { reject(e) }
+    }
+    s.onerror = () => reject(new Error("Không tải được pdf.js"))
+    document.head.appendChild(s)
+  })
+  return _pdfjsPromise
+}
+
+// Bóc toàn bộ text của 1 file PDF (đọc HẾT trang để không bỏ sót; có trần an toàn
+// 1500 trang). Server sẽ lọc giữ phần lâm sàng. onProgress(done,total) để báo tiến độ.
+async function extractPdfText(file, onProgress) {
+  const lib = await ensurePdfJs()
+  const buf = await file.arrayBuffer()
+  const pdf = await lib.getDocument({ data: buf }).promise
+  const maxPages = Math.min(pdf.numPages, 1500)
+  const parts = []
+  for (let i = 1; i <= maxPages; i++) {
+    const page = await pdf.getPage(i)
+    const tc = await page.getTextContent()
+    const txt = tc.items.map(it => it.str).join(" ").trim()
+    parts.push(`==== TRANG ${i} ====\n${txt}`)
+    if (onProgress) onProgress(i, maxPages)
+  }
+  return { text: parts.join("\n\n"), pages: pdf.numPages }
+}
+
 // ASSET_BASE: thư mục gốc trang web lúc chạy. Trên GitHub Pages là "/mediflow-ai/",
 // chạy local là "/". Tự tính nên ảnh logo trỏ đúng dù deploy ở subpath nào.
 // (Không dùng import.meta để tránh lỗi "import.meta outside a module" ở môi trường preview.)
@@ -1945,7 +1988,7 @@ function LogoBar({ compact }) {
   )
 }
 
-function UploadPage({ onUpload, isLoading, error, onDismissError }) {
+function UploadPage({ onUpload, isLoading, loadingMsg, error, onDismissError }) {
   const [dragging, setDragging] = useState(false)
   const [staged, setStaged] = useState([])
   const [preview, setPreview] = useState(null)
@@ -2035,7 +2078,7 @@ function UploadPage({ onUpload, isLoading, error, onDismissError }) {
               <div style={{padding:"24px 0"}}>
                 <div className="loading-spin"/>
                 <p style={{fontSize:15,fontWeight:600,color:"#0A1628",marginBottom:4}}>Đang phân tích hồ sơ...</p>
-                <p style={{fontSize:12,color:"#7A96C8"}}>AI đang đọc và tổng hợp dữ liệu</p>
+                <p style={{fontSize:12,color:"#7A96C8"}}>{loadingMsg || "AI đang đọc và tổng hợp dữ liệu"}</p>
                 <div className="load-steps">
                   {["Trích xuất","Rule Engine","Diễn đạt"].map((s,i)=>(
                     <span key={i} style={{display:"flex",alignItems:"center",gap:6}}>
@@ -3373,6 +3416,7 @@ export default function App() {
   const [hoSoText, setHoSoText] = useState("")
   const [analysis, setAnalysis] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [loadingMsg, setLoadingMsg] = useState("")
   const [uploadError, setUploadError] = useState(null)
   const [chatMessages, setChatMessages] = useState([])
 
@@ -3386,36 +3430,67 @@ export default function App() {
       setReport(MOCK_REPORT); setHoSoText(JSON.stringify(MOCK_REPORT)); setAnalysis(null)
       initChat(MOCK_REPORT); setState("report"); return
     }
-    // Upload thật: gọi backend, KHÔNG tự rơi về hồ sơ mẫu khi lỗi
-    setLoading(true); setUploadError(null)
+    setLoading(true); setUploadError(null); setLoadingMsg("")
     const ctrl = new AbortController()
-    const timer = setTimeout(() => ctrl.abort(), 170000)  // 170s: đủ cho hồ sơ dài + Render free khởi động
-    try {
-      const fd = new FormData(); fd.append("file", file)
-      const res = await fetch(`${API_URL}/analyze`, { method:"POST", body:fd, signal:ctrl.signal })
-      clearTimeout(timer)
-      // Backend quá tải/timeout có thể trả 502/504 không phải JSON -> đọc an toàn
-      let data
-      try { data = await res.json() }
-      catch {
-        setUploadError(res.status >= 500
-          ? `Máy chủ phân tích gặp lỗi (mã ${res.status}). Hồ sơ có thể quá lớn so với giới hạn bộ nhớ của Render gói miễn phí. Hãy thử file ít trang hơn, hoặc xem log trên Render.`
-          : `Phản hồi không hợp lệ từ máy chủ (mã ${res.status}).`)
-        setLoading(false); return
-      }
-      if (!res.ok || !data.success) {
-        setUploadError(data.error || `Máy chủ trả lỗi (mã ${res.status}). Hãy thử lại hoặc dùng file ít trang hơn.`)
-        setLoading(false); return
+    const timer = setTimeout(() => ctrl.abort(), 240000)  // 240s cho hồ sơ rất dày
+
+    // Áp dụng kết quả trả về từ backend (dùng chung cho cả 2 đường)
+    const applyData = (data, status) => {
+      if (!data || !data.success) {
+        setUploadError((data && data.error) || `Máy chủ trả lỗi (mã ${status}). Hãy thử lại.`)
+        setLoading(false); return false
       }
       setReport(data.report)
       setHoSoText(data.ho_so_text || JSON.stringify(data.report))
       setAnalysis(data.analysis || null)
       initChat(data.report)
-      setLoading(false); setState("report")
+      setLoading(false); setState("report"); return true
+    }
+
+    const isPdf = (file.type === "application/pdf") || /\.pdf$/i.test(file.name || "")
+    try {
+      // ── Đường chính cho PDF: bóc chữ ở trình duyệt, chỉ gửi chữ (nhẹ) lên server ──
+      if (isPdf) {
+        try {
+          const { text, pages } = await extractPdfText(file, (done, total) => {
+            setLoadingMsg(`Đang đọc trang ${done}/${total}`)
+          })
+          setLoadingMsg(pages > 120 ? "Đang lọc trang quan trọng và phân tích..." : "AI đang đọc và tổng hợp dữ liệu")
+          if (text && text.replace(/[^A-Za-zÀ-ỹ0-9]/g, "").length >= 100) {
+            const res = await fetch(`${API_URL}/analyze_text`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ho_so_text: text, pages }),
+              signal: ctrl.signal,
+            })
+            clearTimeout(timer)
+            let data; try { data = await res.json() } catch { data = null }
+            if (!data) {
+              setUploadError(`Máy chủ phân tích gặp lỗi (mã ${res.status}). Hãy thử lại sau giây lát.`)
+              setLoading(false); return
+            }
+            applyData(data, res.status); return
+          }
+          // text quá ít (PDF scan ảnh) -> rơi xuống gửi file để server xử lý/ báo lỗi rõ
+        } catch (exErr) {
+          // pdf.js không tải được hoặc PDF lỗi -> quay về gửi file
+        }
+      }
+
+      // ── Đường dự phòng: gửi nguyên file (PDF nhỏ, ảnh, hoặc bóc chữ thất bại) ──
+      const fd = new FormData(); fd.append("file", file)
+      const res = await fetch(`${API_URL}/analyze`, { method:"POST", body:fd, signal:ctrl.signal })
+      clearTimeout(timer)
+      let data; try { data = await res.json() } catch { data = null }
+      if (!data) {
+        setUploadError(`Máy chủ phân tích gặp lỗi (mã ${res.status}). File có thể quá lớn để tải lên trực tiếp; nếu là PDF scan, hãy dùng bản PDF có chữ.`)
+        setLoading(false); return
+      }
+      applyData(data, res.status)
     } catch (e) {
       clearTimeout(timer)
       if (e.name === "AbortError") {
-        setUploadError("Quá thời gian xử lý (hơn 170 giây). Hồ sơ có thể quá nhiều trang, hoặc máy chủ vừa khởi động lại nên chậm lần đầu. Hãy thử lại, hoặc dùng file ít trang hơn.")
+        setUploadError("Quá thời gian xử lý (hơn 240 giây). Hồ sơ rất dày nên AI cần lâu hơn, hoặc máy chủ vừa khởi động lại. Hãy thử lại.")
       } else {
         setUploadError("Không kết nối được máy chủ phân tích. Máy chủ có thể đang khởi động lại (chờ rồi thử lại), hoặc trình duyệt chặn (CORS). Chatbot chạy được nghĩa là khóa API vẫn ổn.")
       }
@@ -3426,7 +3501,7 @@ export default function App() {
   return (
     <>
       <style>{CSS}</style>
-      {state === "upload" && <UploadPage onUpload={handleUpload} isLoading={loading} error={uploadError} onDismissError={()=>setUploadError(null)}/>}
+      {state === "upload" && <UploadPage onUpload={handleUpload} isLoading={loading} loadingMsg={loadingMsg} error={uploadError} onDismissError={()=>setUploadError(null)}/>}
       {state === "report" && report && (
         <ReportPage report={report} hoSoText={hoSoText} analysis={analysis}
           onReset={()=>{setState("upload");setReport(null);setAnalysis(null);setChatMessages([])}}
