@@ -664,7 +664,7 @@ const CSS = `
   .fc-panel{position:fixed;bottom:24px;right:24px;z-index:200;width:370px;max-width:calc(100vw - 32px);height:540px;max-height:calc(100vh - 48px);background:#fff;border-radius:18px;box-shadow:0 16px 48px rgba(15,42,94,0.28);display:flex;flex-direction:column;overflow:hidden;border:1px solid rgba(200,220,255,0.5)}
   .fc-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:linear-gradient(120deg,#1A3F8F,var(--blue))}
   .fc-head-l{display:flex;align-items:center;gap:9px}
-  .fc-avatar{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center}
+  .fc-avatar{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;overflow:hidden}
   .fc-title{font-size:13px;font-weight:700;color:#fff}
   .fc-sub{font-size:11px;color:rgba(200,225,255,0.8)}
   .fc-head-r{display:flex;gap:4px}
@@ -694,7 +694,7 @@ const CSS = `
   .sug-chip:disabled{opacity:0.5;cursor:default}
   .msg-row{display:flex;align-items:flex-end;gap:8px}
   .msg-row.user{justify-content:flex-end}
-  .bot-avatar{width:28px;height:28px;border-radius:10px;background:linear-gradient(135deg,var(--blue),var(--cyan));display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .bot-avatar{width:28px;height:28px;border-radius:10px;background:linear-gradient(135deg,var(--blue),var(--cyan));display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}
   .bubble{max-width:78%;border-radius:18px;padding:11px 15px;font-size:13px;line-height:1.6;text-align:left}
   .bubble.user{background:linear-gradient(135deg,var(--blue),var(--cyan));color:#fff;box-shadow:0 3px 12px rgba(29,111,232,0.22)}
   .bubble.bot{background:rgba(255,255,255,0.82);color:var(--navy2);border:1px solid rgba(200,220,255,0.45);backdrop-filter:blur(10px)}
@@ -795,6 +795,17 @@ function BrandMark({ size = 36, radius = 10 }) {
       <circle cx="20" cy="27.2" r="1.7" fill="#fff"/>
       <circle cx="34.5" cy="20.5" r="2.1" fill="#7FE7F5" filter={`url(#${id}gl)`}/>
     </svg>
+  )
+}
+
+// Avatar MedAmi: ưu tiên ảnh medami.png, tự fallback về icon robot nếu ảnh lỗi/chưa deploy
+function MedAmiAvatar({ robotSize = 13 }) {
+  const [err, setErr] = useState(false)
+  if (err) return <Icon.Robot d={robotSize} color="white"/>
+  return (
+    <img src={asset("medami.png")} alt="MedAmi"
+      style={{ width:"100%", height:"100%", objectFit:"cover", borderRadius:"inherit", display:"block" }}
+      onError={()=>setErr(true)}/>
   )
 }
 
@@ -3332,7 +3343,7 @@ function FloatingChat({ report, hoSoText, messages, setMessages, onExpand }) {
         <div className="fc-panel">
           <div className="fc-head">
             <div className="fc-head-l">
-              <div className="fc-avatar"><img src={asset("medami.png")} alt="MedAmi" style={{width:"100%",height:"100%",objectFit:"cover",borderRadius:"50%"}} onError={e=>{e.currentTarget.style.display="none"}}/></div>
+              <div className="fc-avatar"><MedAmiAvatar robotSize={15}/></div>
               <div>
                 <div className="fc-title">MedAmi</div>
                 <div className="fc-sub">{report.thong_tin_benh_nhan.ho_ten}</div>
@@ -3350,11 +3361,11 @@ function FloatingChat({ report, hoSoText, messages, setMessages, onExpand }) {
           <div className="fc-msgs">
             {messages.map((m,i)=>(
               <div key={i} className={`msg-row${m.role==="user"?" user":""}`}>
-                {m.role==="assistant"&&<div className="bot-avatar sm"><Icon.Robot d={11} color="white"/></div>}
+                {m.role==="assistant"&&<div className="bot-avatar sm"><MedAmiAvatar robotSize={11}/></div>}
                 <div className={`bubble sm ${m.role==="user"?"user":"bot"}`}>{renderMd(m.content)}</div>
               </div>
             ))}
-            {loading&&<div className="msg-row"><div className="bot-avatar sm"><Icon.Robot d={11} color="white"/></div><div className="bubble sm bot"><div className="typing"><span/><span/><span/></div></div></div>}
+            {loading&&<div className="msg-row"><div className="bot-avatar sm"><MedAmiAvatar robotSize={11}/></div><div className="bubble sm bot"><div className="typing"><span/><span/><span/></div></div></div>}
             <div ref={bottomRef}/>
           </div>
           <div className="fc-sug">
@@ -3402,11 +3413,11 @@ function ChatTab({ report, hoSoText, messages, setMessages }) {
       <div className="chat-msgs">
         {messages.map((m,i)=>(
           <div key={i} className={`msg-row${m.role==="user"?" user":""}`}>
-            {m.role==="assistant"&&<div className="bot-avatar"><Icon.Robot d={13} color="white"/></div>}
+            {m.role==="assistant"&&<div className="bot-avatar"><MedAmiAvatar robotSize={13}/></div>}
             <div className={`bubble ${m.role==="user"?"user":"bot"}`}>{renderMd(m.content)}</div>
           </div>
         ))}
-        {loading&&<div className="msg-row"><div className="bot-avatar"><Icon.Robot d={13} color="white"/></div><div className="bubble bot"><div className="typing"><span/><span/><span/></div></div></div>}
+        {loading&&<div className="msg-row"><div className="bot-avatar"><MedAmiAvatar robotSize={13}/></div><div className="bubble bot"><div className="typing"><span/><span/><span/></div></div></div>}
         <div ref={bottomRef}/>
       </div>
       <div className="chat-suggestions">
