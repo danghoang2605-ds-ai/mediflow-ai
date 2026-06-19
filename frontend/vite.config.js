@@ -3,6 +3,6 @@ import react from "@vitejs/plugin-react"
 
 export default defineConfig({
   plugins: [react()],
-  base: '/mediflow-ai/', // Khai báo base path trùng với tên repo GitHub của bạn
+  base: '/medparcours-ai/', // ĐỔI TÊN Ở DÒNG NÀY
   server: { port: 5173 },
 })
