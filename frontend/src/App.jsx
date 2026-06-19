@@ -6,6 +6,30 @@ import { useState, useRef, useEffect, useCallback, Component } from "react"
 // Có thể ghi đè bằng window.MEDIFLOW_API_URL trong index.html mà không cần sửa file này.
 const API_URL = (typeof window !== "undefined" && window.MEDIFLOW_API_URL) || "https://danghoang2605-mediflow-ai.hf.space"
 
+// ─── Lớp gọi Backend (Hugging Face Spaces) ───────────────────────────────────
+// analyzeText/analyze: phân tích hồ sơ. mdt/teaching: lấy biên bản hội chẩn và
+// bài giảng từ medparcours_modes_backend.py. Mọi lỗi sẽ ném ra để nơi gọi fallback.
+async function mpFetchJSON(path, body, ms=45000){
+  const ctrl = new AbortController()
+  const timer = setTimeout(()=>ctrl.abort(), ms)
+  try {
+    const res = await fetch(`${API_URL}${path}`, { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(body), signal: ctrl.signal })
+    if(!res.ok) throw new Error("API "+res.status)
+    return await res.json()
+  } finally { clearTimeout(timer) }
+}
+const mpApi = {
+  analyzeText: (ho_so_text, pages=0) => mpFetchJSON("/analyze_text", { ho_so_text, pages }),
+  analyzeFile: async (file) => {
+    const fd = new FormData(); fd.append("file", file)
+    const res = await fetch(`${API_URL}/analyze`, { method:"POST", body: fd })
+    if(!res.ok) throw new Error("API "+res.status)
+    return res.json()
+  },
+  mdt: (report) => mpFetchJSON("/mdt", { report }),
+  teaching: (report) => mpFetchJSON("/teaching", { report }),
+}
+
 // ─── Bóc chữ PDF NGAY TRONG TRÌNH DUYỆT (pdf.js từ CDN) ───────────────────────
 // File lớn (vd 100 trang, 14MB) chỉ chứa vài trăm KB chữ. Bóc chữ ở client rồi
 // gửi mình phần chữ lên server, nên không bị nghẽn ở giới hạn dung lượng upload.
@@ -206,7 +230,7 @@ const CSS = `
   .nav-left{display:flex;align-items:center;gap:14px}
   .nav-sep{color:rgba(200,220,255,0.5);font-size:10px}
   .nav-patient{display:flex;align-items:center;gap:8px}
-  .patient-avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#DBEAFE,#BFDBFE);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--blue)}
+  .patient-avatar{width:28px;height:28px;flex:0 0 28px;flex-shrink:0;border-radius:50%;background:linear-gradient(135deg,#DBEAFE,#BFDBFE);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--blue)}
   .patient-name{font-size:13px;font-weight:600;color:var(--navy2)}
   .patient-meta{font-size:11px;background:rgba(29,111,232,0.08);color:var(--navy3);padding:3px 8px;border-radius:6px}
   .nav-right{display:flex;align-items:center;gap:8px}
@@ -2032,6 +2056,7 @@ function LogoBar({ compact }) {
 function UploadPage({ onUpload, isLoading, loadingMsg, error, onDismissError, onOpenHistory, onLogout }) {
   const [dragging, setDragging] = useState(false)
   const [staged, setStaged] = useState([])
+  const [note, setNote] = useState("")
   const [preview, setPreview] = useState(null)
   const inputRef = useRef()
 
@@ -2081,11 +2106,10 @@ function UploadPage({ onUpload, isLoading, loadingMsg, error, onDismissError, on
           <BrandMark size={36} radius={10}/>
           <div><span className="logo-text">Med<em>Parcours</em></span> <span className="logo-sub">AI</span></div>
         </div>
-        <div className="status-pill"><span className="status-dot" />Hệ thống hoạt động</div>
       </nav>
       <div className="hero-wrap">
         <div>
-          <div className="hero-tag"><Icon.Heart d={12} color="#1D6FE8" /><div className="hero-tag-lines"><span>Vietnamese Student HackAIthon 2026</span><span>Bảng B Challenger</span><span>Đề tài 5: Y tế</span></div></div>
+          <div className="hero-tag"><Icon.Heart d={12} color="#1D6FE8" /><div className="hero-tag-lines"><span><b>Team UN1SVENGERS</b></span><span>Vietnamese Student HackAIthon 2026 · Bảng B Challenger</span><span>Đề tài 5: Y tế</span></div></div>
           <h1 className="hero-h1">Hồ sơ bệnh nhân<br /><em>phân tích trong 30 giây.</em></h1>
           <p className="hero-desc">Bác sĩ upload PDF xuất từ HIS. AI đọc toàn bộ hồ sơ, tổng hợp báo cáo có cấu trúc, phát hiện cảnh báo nguy cơ và sẵn sàng trả lời mọi câu hỏi lâm sàng.</p>
           <div className="feat-list">
@@ -2094,10 +2118,9 @@ function UploadPage({ onUpload, isLoading, loadingMsg, error, onDismissError, on
             ))}
           </div>
           <div className="stats-row">
-            {[["80%","Tiết kiệm","Thời gian đọc và phân tích hồ sơ",<Icon.Clock d={14} color="#1D6FE8"/>],["100%","Cảnh báo","Rủi ro lâm sàng và tương tác thuốc",<Icon.Shield d={14} color="#1D6FE8"/>],["1-click","Truy xuất","Minh bạch nguồn gốc dữ liệu",<Icon.Search d={14} color="#1D6FE8"/>]].map(([n,label,sub,ic])=>(
-              <div key={label} className="stat-block">
+            {[["~90%","thời gian được tiết kiệm",<Icon.Clock d={14} color="#1D6FE8"/>],["~30 giây","cho mỗi báo cáo phân tích",<Icon.Pulse d={14} color="#1D6FE8"/>],["3 chế độ","Bác sĩ - Hội chẩn - Giảng dạy",<Icon.Layers d={14} color="#1D6FE8"/>],["100%","cảnh báo rủi ro lâm sàng",<Icon.Shield d={14} color="#1D6FE8"/>]].map(([n,sub,ic])=>(
+              <div key={n} className="stat-block">
                 <div style={{display:"flex",alignItems:"center",gap:6}}>{ic}<div className="stat-n">{n}</div></div>
-                <div className="stat-label">{label}</div>
                 <div className="stat-sub">{sub}</div>
               </div>
             ))}
@@ -2169,10 +2192,10 @@ function UploadPage({ onUpload, isLoading, loadingMsg, error, onDismissError, on
                       <div key={i} className="stage-card">
                         <button className="stage-x" onClick={()=>removeAt(i)} title="Xóa"><Icon.Close d={11} color="#64748B"/></button>
                         <div className="stage-thumb" style={{background:"rgba(14,148,136,.1)"}} title={s.text}>
-                          <span className="stage-tag" style={{color:"#0E9488"}}>GHI ÂM</span>
+                          <span className="stage-tag" style={{color:"#0E9488"}}>{s.tag||"GHI ÂM"}</span>
                         </div>
                         <div className="stage-name" title={s.text}>{s.name}</div>
-                        <div className="stage-meta">{words} từ · giọng nói chuyển văn bản</div>
+                        <div className="stage-meta">{words} từ · lời dặn kèm hồ sơ</div>
                       </div>
                     )
                   }
@@ -2206,8 +2229,14 @@ function UploadPage({ onUpload, isLoading, loadingMsg, error, onDismissError, on
           {!isLoading&&staged.length===0&&<div style={{textAlign:"center"}}><span className="demo-link" onClick={()=>onUpload(null)}>Xem demo: hồ sơ Nguyễn Văn A <span style={{fontSize:10}}>▶</span></span> <button className="hist-link" onClick={onOpenHistory}><Icon.FileText d={13} color="#1D6FE8"/>Lịch sử bệnh án</button></div>}
           {!isLoading && (
             <div className="rec-inline-wrap">
-              <div className="rec-inline-h"><Icon.Pulse d={13} color="#1D6FE8"/>Ghi âm lời dặn của bác sĩ - đính kèm cùng hồ sơ</div>
-              <AudioRecorder onAttach={(t)=>setStaged(prev=>[...prev,{name:"Ghi âm lời dặn", isAudio:true, text:t, size:t.length}])}/>
+              <div className="rec-inline-h"><Icon.Pulse d={13} color="#1D6FE8"/>Lời dặn của bác sĩ - nhập trực tiếp, tải file .txt hoặc ghi âm</div>
+              <textarea className="note-text" value={note} onChange={e=>setNote(e.target.value)} placeholder="Nhập lời dặn, chỉ định thêm hoặc lưu ý cho hồ sơ..."/>
+              <div className="note-actions">
+                <button className="note-attach" onClick={()=>{const v=note.trim();if(!v)return;setStaged(prev=>[...prev,{name:"Lời dặn bác sĩ",isAudio:true,tag:"LỜI DẶN",text:v,size:v.length}]);setNote("")}} disabled={!note.trim()}><Icon.Upload d={12} color="#fff"/>Đính kèm lời dặn</button>
+                <label className="note-upload"><Icon.FileText d={13} color="#1D6FE8"/>Tải lên .txt<input type="file" accept=".txt,text/plain" style={{display:"none"}} onChange={async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;try{const txt=await f.text();setStaged(prev=>[...prev,{name:f.name,isAudio:true,tag:"FILE .TXT",text:txt,size:f.size}])}catch{}e.target.value=""}}/></label>
+              </div>
+              <div className="rec-divider"><span>hoặc ghi âm giọng nói</span></div>
+              <AudioRecorder onAttach={(t)=>setStaged(prev=>[...prev,{name:"Ghi âm lời dặn", isAudio:true, tag:"GHI ÂM", text:t, size:t.length}])}/>
             </div>
           )}
         </div>
@@ -2261,6 +2290,7 @@ function SidebarMinimap({ activeId, onNavigate }) {
 function ReportPage({ report, hoSoText, analysis, onReset, chatMessages, setChatMessages, onOpenHistory, onLogout }) {
   const [tab, setTab] = useState("report")
   const [viewMode, setViewMode] = useState("clinical")
+  const [menuOpen, setMenuOpen] = useState(false)
   useEffect(() => {
     setChatMessages(prev => (prev.length <= 1
       ? [{ role:"assistant", content: modeGreeting(viewMode, report.thong_tin_benh_nhan && report.thong_tin_benh_nhan.ho_ten) }]
@@ -2340,11 +2370,19 @@ function ReportPage({ report, hoSoText, analysis, onReset, chatMessages, setChat
                 <button key={key} className={`tab-btn${tab===key?" active":""}`} onClick={()=>setTab(key)}>{ic} {label}</button>
               ))}
             </div>
-            <div className="tb-group">
-              <button className="tb-btn" onClick={onOpenHistory} title="Lịch sử bệnh án"><Icon.Clock d={14} color="#475569"/>Lịch sử</button>
-              <button className="tb-btn" onClick={()=>triggerPrint(report, viewMode)} title="Xuất báo cáo"><Icon.Print d={14} color="#475569"/>Xuất</button>
-              <button className="tb-btn" onClick={onReset} title="Phân tích hồ sơ mới"><Icon.Back d={13} color="#475569"/>Hồ sơ mới</button>
-              <button className="tb-btn danger" onClick={onLogout} title="Đăng xuất tài khoản"><Icon.Close d={13} color="#475569"/>Đăng xuất</button>
+            <button className="nav-export" onClick={()=>triggerPrint(report, viewMode)} title="Xuất báo cáo"><Icon.Print d={14} color="#fff"/>Xuất báo cáo</button>
+            <div className="nav-menu-wrap">
+              <button className="nav-burger" onClick={()=>setMenuOpen(o=>!o)} title="Menu" aria-label="Menu">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#334155" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+              </button>
+              {menuOpen && <>
+                <div className="nav-menu-ov" onClick={()=>setMenuOpen(false)}/>
+                <div className="nav-menu">
+                  <button onClick={()=>{setMenuOpen(false);onOpenHistory()}}><Icon.Clock d={14} color="#475569"/>Lịch sử bệnh án</button>
+                  <button onClick={()=>{setMenuOpen(false);onReset()}}><Icon.Back d={13} color="#475569"/>Hồ sơ mới</button>
+                  <button className="danger" onClick={()=>{setMenuOpen(false);onLogout()}}><Icon.Close d={13} color="#DC2626"/>Đăng xuất</button>
+                </div>
+              </>}
             </div>
           </div>
         </div>
@@ -3426,7 +3464,7 @@ function FloatingChat({ report, hoSoText, messages, setMessages, onExpand, mode 
             <div ref={bottomRef}/>
           </div>
           <div className="fc-sug">
-            {["Biến chứng sau mổ?","Thuốc chống đông?","Diễn biến CRP?"].map(s=>(
+            {chatSuggestions(mode).slice(0,3).map(s=>(
               <button key={s} onClick={()=>send(s)} disabled={loading}>{s}</button>
             ))}
           </div>
@@ -3532,7 +3570,7 @@ const PATIENT_B = {
   thong_tin_benh_nhan: { ho_ten:"NGUYỄN VĂN B", ngay_sinh:"01/01/1958", tuoi:68, gioi_tinh:"Nam", dia_chi:"Xã Tân Tiến, Hưng Yên", ngay_vao_vien:"04/06/2026", ngay_ra_vien:"", so_benh_an:"26.007850" },
   chan_doan_chinh: "Hở van hai lá nhiều type II P2.P3 (đứt dây chằng sa lá sau P3) - Hở van ba lá nhiều - Tăng áp động mạch phổi nặng (ALĐMP tâm thu ~85 mmHg) - Suy tim. Sau mổ sửa van hai lá + sửa van ba lá nội soi (05/06/2026).",
   ly_do_vao_vien: "Khó thở tăng, suy tim mất bù. Phát hiện hở van hai lá nhiều trên 1 năm, vào viện chờ phẫu thuật.",
-  tien_su_benh: "Hở van hai lá nhiều - suy tim trên 1 năm (bản thân). Nam 68 tuổi. Gia đình bình thường.",
+  tien_su_benh: "Bệnh mạch vành đã đặt 2 stent ĐMV (2024), tăng huyết áp, suy tim với EF từng giảm còn 32% rồi hồi phục dần (58% cuối 2025). Theo dõi hở van hai lá tiến triển trên 1 năm, lần này vào viện vì suy tim mất bù do hở van hai lá nặng. Nam 68 tuổi, gia đình bình thường.",
   phau_thuat: { ngay:"05/06/2026", phuong_phap:"Sửa van hai lá (vòng van Edwards 28mm) + Sửa van ba lá (vòng van Edwards 26mm), nội soi. Phẫu thuật đặc biệt khó, gây mê nội khí quản, chạy tuần hoàn ngoài cơ thể.", ket_qua:"Khâu khép A3P3 đặt vòng van, test nước còn hở nhẹ. Siêu âm thực quản trong mổ: van hai lá và van ba lá hở nhẹ.", bac_si_phau_thuat:"ThS.BS Nguyễn Văn X / ThS.BS Lê Văn Y" },
   dien_bien_lam_sang: [
     { ngay:"04/06/2026", mo_ta:"Nhập viện khoa Phẫu Thuật Tim Người Lớn vì suy tim mất bù do hở van hai lá nặng. Chờ phẫu thuật.", loai:"binh_thuong" },
@@ -3564,11 +3602,14 @@ const PATIENT_B = {
     { key:"INR",       val:"1.8",         rawVal:1.8,  unit:"",       desc:"Đông máu (chống đông)", normal:"2.0-3.0", status:"low",    trend:[1.65,3.94,2.2,1.8], trendDates:["05/06","09/06","10/06","14/06"], arrow:"down" },
     { key:"NT-proBNP", val:"837 pg/mL",   rawVal:837,  unit:"pg/mL",  desc:"Marker suy tim",        normal:"<125",    status:"high",   trend:[4235,4851,837], trendDates:["tiền mổ","06/06","12/06"], arrow:"down" },
     { key:"Lactate",   val:"9.28 mmol/L", rawVal:9.28, unit:"mmol/L", desc:"Lactate đỉnh (giảm tưới máu)", normal:"0.4-2.2", status:"high", trend:[1.96,3.7,9.28], trendDates:["05/06","05/06","06/06"], arrow:"up" },
-    { key:"EF",        val:"68%",         rawVal:68,   unit:"%",      desc:"Phân suất tống máu (trước mổ)", normal:"55-70", status:"normal", trend:[68], trendDates:["04/06"], arrow:"ok" },
+    { key:"EF",        val:"68%",         rawVal:68,   unit:"%",      desc:"Phân suất tống máu (diễn tiến 2025-2026)", normal:"55-70", status:"normal", trend:[32,42,58,68], trendDates:["19/05/25","21/05/25","13/12/25","04/06/26"], arrow:"up" },
   ],
   sieu_am_tim: {
     lan_kham: [
-      { ngay:"04/06/2026", nguon:"SA tim tiền mê", chan_doan:"HoHL 4/4 - HoBL 3.5/4 - TAP nặng", ef:68, grad_max:null, grad_tb:null, hoc:"Nặng (ngoài van)", phase:"truoc_mo", ghi_chu:"Dd 52, EF 68%. Sa toàn bộ lá sau do đứt dây chằng. ALĐMP tâm thu ~85 mmHg. Giãn buồng tim phải, nhĩ trái giãn, không huyết khối.", canh_bao:false },
+      { ngay:"19/05/2025", nguon:"SA tim Philips", chan_doan:"Suy tim, EF giảm nặng", ef:32, grad_max:5, grad_tb:null, hoc:"Nhẹ (1/4)", phase:"truoc_mo", ghi_chu:"Giảm vận động đồng đều các thành thất trái. Tiền sử 2 stent ĐMV (2024), tăng huyết áp. HoHL nhẹ.", canh_bao:true },
+      { ngay:"21/05/2025", nguon:"SA tim Philips", chan_doan:"Chức năng tâm thu thất trái giảm", ef:42, grad_max:5, grad_tb:null, hoc:"Nhẹ (1/4)", phase:"truoc_mo", ghi_chu:"EF Simpson 4B ~44%, 2B ~40%, Biplane ~42%. Thất trái không giãn (Dd index 28.3). ALĐMP tâm thu 25 mmHg. Không dịch màng tim.", canh_bao:false },
+      { ngay:"13/12/2025", nguon:"SA tim Philips", chan_doan:"Chức năng tâm thu thất trái hồi phục", ef:58, grad_max:4, grad_tb:null, hoc:"Nhẹ (1/4)", phase:"truoc_mo", ghi_chu:"Không rối loạn vận động vùng. EF 58%, thất trái không giãn (Dd index 27.5). ALĐMP 23 mmHg. Giãn nhẹ ĐMC lên 37 mm, không tách thành.", canh_bao:false },
+      { ngay:"04/06/2026", nguon:"SA tim tiền mê", chan_doan:"HoHL 4/4 - HoBL 3.5/4 - TAP nặng", ef:68, grad_max:null, grad_tb:null, hoc:"Nặng (ngoài van)", phase:"truoc_mo", ghi_chu:"Dd 52, EF 68%. Sa toàn bộ lá sau do đứt dây chằng. ALĐMP tâm thu ~85 mmHg. Giãn buồng tim phải, nhĩ trái giãn, không huyết khối.", canh_bao:true },
       { ngay:"05/06/2026", nguon:"SA thực quản trong mổ", chan_doan:"Sau sửa VHL + VBL", ef:null, grad_max:4, grad_tb:2, hoc:"Nhẹ (trong vòng van)", phase:"sau_mo", ghi_chu:"Đánh giá kết quả sửa van: HoHL nhẹ <1/4 (VC 2.9mm); HoBL nhẹ-vừa 1.5/4 (VC 3.9mm). Vòng van Edwards 28mm (hai lá) + 26mm (ba lá).", canh_bao:false, latest:true },
     ],
   },
@@ -3659,7 +3700,7 @@ function modeGreeting(mode, name){
 function chatSuggestions(mode){
   if(mode==="hoi_chan") return ["Tóm tắt kết luận hội chẩn?","Vấn đề ưu tiên số 1 là gì?","Điểm nào các khoa chưa đồng thuận?","Cần thêm cận lâm sàng gì?"]
   if(mode==="teaching") return ["Tóm tắt ca bệnh trong 2 câu?","Chẩn đoán phân biệt gồm những gì?","Vì sao nghĩ đến suy tim?","Hướng điều trị và theo dõi?"]
-  return chatSuggestions(mode)
+  return ["Bệnh nhân có biến chứng gì sau mổ?","Đang dùng thuốc chống đông loại nào?","Kết quả siêu âm tim sau mổ?","Diễn biến CRP theo thời gian?"]
 }
 
 // ─── Tiện ích chung ───────────────────────────────────────────────────────────
@@ -3836,34 +3877,62 @@ function LoginPage({ onLogin }){
     if(u.trim()==="hackaithon2026" && p==="medparcours"){ setErr(""); onLogin() }
     else setErr("Tên đăng nhập hoặc mật khẩu không đúng.")
   }
+  const FEATURES = [
+    { ic:<Icon.FileText d={16} color="#1D6FE8"/>, t:"Tự động phân tích hồ sơ bệnh án theo 3 giai đoạn" },
+    { ic:<Icon.Stethoscope d={16} color="#0E9488"/>, t:"Hội chẩn đa chuyên khoa ảo (Virtual MDT)" },
+    { ic:<Icon.Brain d={16} color="#9333EA"/>, t:"Giảng dạy lâm sàng theo khung bệnh án HMU" },
+    { ic:<Icon.Chat d={16} color="#1D6FE8"/>, t:"Chatbot hỏi đáp riêng cho từng hồ sơ" },
+  ]
+  const STATS = [
+    { v:"~90%", l:"thời gian được tiết kiệm" },
+    { v:"~30 giây", l:"cho mỗi báo cáo phân tích" },
+    { v:"3 chế độ", l:"Bác sĩ - Hội chẩn - Giảng dạy" },
+    { v:"100%", l:"cảnh báo rủi ro lâm sàng" },
+  ]
   return (
     <div className="login-wrap">
       <div className="login-bg1"/><div className="login-bg2"/><div className="login-bg3"/>
-      <div className="login-inner">
-        <div className="login-card">
-          <div className="login-logo"><BrandMark size={52} radius={14}/></div>
-          <div className="login-brand">Med<em>Parcours</em> <span>AI</span></div>
-          <div className="login-sub">Trợ lý lâm sàng cho bác sĩ - Đăng nhập để tiếp tục</div>
-          <div className="login-field">
-            <label>Tên đăng nhập</label>
-            <input value={u} onChange={e=>setU(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()} placeholder="Nhập tên đăng nhập" autoFocus/>
-          </div>
-          <div className="login-field">
-            <label>Mật khẩu</label>
-            <div className="pw-wrap">
-              <input type={showPw?"text":"password"} value={p} onChange={e=>setP(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()} placeholder="Nhập mật khẩu" style={{paddingRight:"40px"}}/>
-              <button type="button" className="pw-eye" onClick={()=>setShowPw(s=>!s)} title={showPw?"Ẩn mật khẩu":"Hiện mật khẩu"} aria-label="Hiện/ẩn mật khẩu">
-                {showPw
-                  ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                  : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}
-              </button>
+      <div className="login-inner2">
+        <div className="login-grid">
+          <div className="login-col-form">
+            <div className="login-card">
+              <div className="login-logo"><BrandMark size={46} radius={13}/></div>
+              <div className="login-brand">Med<em>Parcours</em> <span>AI</span></div>
+              <div className="login-sub">Trợ lý lâm sàng cho bác sĩ - Đăng nhập để tiếp tục</div>
+              <div className="login-field">
+                <label>Tên đăng nhập</label>
+                <input value={u} onChange={e=>setU(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()} placeholder="Nhập tên đăng nhập" autoFocus/>
+              </div>
+              <div className="login-field">
+                <label>Mật khẩu</label>
+                <div className="pw-wrap">
+                  <input type={showPw?"text":"password"} value={p} onChange={e=>setP(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()} placeholder="Nhập mật khẩu" style={{paddingRight:"40px"}}/>
+                  <button type="button" className="pw-eye" onClick={()=>setShowPw(s=>!s)} title={showPw?"Ẩn mật khẩu":"Hiện mật khẩu"} aria-label="Hiện/ẩn mật khẩu">
+                    {showPw
+                      ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                      : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}
+                  </button>
+                </div>
+              </div>
+              {err && <div className="login-err"><Icon.Alert d={14} color="#B91C1C"/>{err}</div>}
+              <button className="btn-primary login-btn" onClick={submit}>Đăng nhập</button>
+              <div className="login-hint">
+                <div className="login-hint-row"><span>Tài khoản dùng thử</span><b>hackaithon2026</b></div>
+                <div className="login-hint-row"><span>Mật khẩu</span><b>medparcours</b></div>
+              </div>
             </div>
           </div>
-          {err && <div className="login-err"><Icon.Alert d={14} color="#B91C1C"/>{err}</div>}
-          <button className="btn-primary login-btn" onClick={submit}>Đăng nhập</button>
-          <div className="login-hint">
-            <div className="login-hint-row"><span>Tài khoản dùng thử</span><b>hackaithon2026</b></div>
-            <div className="login-hint-row"><span>Mật khẩu</span><b>medparcours</b></div>
+          <div className="login-col-hero">
+            <div className="login-hero-tag">Nền tảng phân tích bệnh án bằng AI</div>
+            <div className="login-team">Team UN1SVENGERS · Vietnamese Student HackAIthon 2026 · Bảng B Challenger · Đề tài 5: Y tế</div>
+            <h1 className="login-hero-title">Đọc hồ sơ nhanh hơn,<br/>quyết định lâm sàng tự tin hơn.</h1>
+            <p className="login-hero-desc">MedParcours AI đọc hồ sơ HIS, tự động tóm tắt, cảnh báo nguy cơ và hỗ trợ hội chẩn cùng giảng dạy lâm sàng cho bác sĩ và sinh viên y khoa.</p>
+            <div className="login-feat">
+              {FEATURES.map((f,i)=>(<div key={i} className="login-feat-row"><span className="login-feat-ic">{f.ic}</span>{f.t}</div>))}
+            </div>
+            <div className="login-stats">
+              {STATS.map((s,i)=>(<div key={i} className="login-stat"><div className="login-stat-v">{s.v}</div><div className="login-stat-l">{s.l}</div></div>))}
+            </div>
           </div>
         </div>
         <div className="login-logos"><LogoBar/></div>
@@ -3927,12 +3996,28 @@ const VIEW_MODES = [
   { key:"teaching", label:"Học vụ (Giảng dạy)" },
 ]
 function ModeDropdown({ mode, onChange }){
+  const [open, setOpen] = useState(false)
+  const cur = VIEW_MODES.find(m=>m.key===mode) || VIEW_MODES[0]
   return (
     <div className="mode-dd">
       <span className="mode-dd-lbl">Chế độ</span>
-      <select value={mode} onChange={e=>onChange(e.target.value)}>
-        {VIEW_MODES.map(m=><option key={m.key} value={m.key}>{m.label}</option>)}
-      </select>
+      <div className="mode-cd">
+        <button type="button" className={`mode-cd-btn${open?" open":""}`} onClick={()=>setOpen(o=>!o)}>
+          <span className="mode-cd-dot"/>{cur.label}
+          <svg className="mode-cd-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        {open && <>
+          <div className="mode-cd-ov" onClick={()=>setOpen(false)}/>
+          <div className="mode-cd-list">
+            {VIEW_MODES.map(m=>(
+              <button key={m.key} className={`mode-cd-item${m.key===mode?" sel":""}`} onClick={()=>{onChange(m.key);setOpen(false)}}>
+                <span className="mode-cd-dot"/>{m.label}
+                {m.key===mode && <Icon.Dot d={8} color="#1D6FE8"/>}
+              </button>
+            ))}
+          </div>
+        </>}
+      </div>
     </div>
   )
 }
@@ -3982,9 +4067,15 @@ function SpecCard({ y }){
 }
 function stanceClass(s){ return /có/i.test(s)?"yes":/không/i.test(s)?"no":"neu" }
 function MDTView({ report }){
-  const mdt = deriveMDT(report)
+  const [mdt, setMdt] = useState(() => deriveMDT(report))
   const [shown, setShown] = useState(0)
   const [askI, setAskI] = useState(-1)
+  useEffect(() => {
+    let alive = true
+    setMdt(deriveMDT(report))
+    mpApi.mdt(report).then(d => { if(alive && d && Array.isArray(d.specialties)) setMdt(d) }).catch(()=>{})
+    return () => { alive = false }
+  }, [report])
   useEffect(() => {
     setShown(0); setAskI(-1)
     const id=setInterval(()=>setShown(s=>{ if(s>=mdt.specialties.length){clearInterval(id);return s} return s+1 }),520)
@@ -4077,8 +4168,14 @@ function TeachCard({ n, title, children, accent }){
   return <div className={`teach-sec${accent?" "+accent:""}`}><div className="teach-sec-t"><span className="teach-sec-n">{n}</span>{title}</div><div className="teach-sec-b">{children}</div></div>
 }
 function TeachingView({ report }){
-  const t = deriveTeaching(report)
+  const [t, setT] = useState(() => deriveTeaching(report))
   const [sub, setSub] = useState("guided")
+  useEffect(() => {
+    let alive = true
+    setT(deriveTeaching(report))
+    mpApi.teaching(report).then(d => { if(alive && d && Array.isArray(d.socratic)) setT(d) }).catch(()=>{})
+    return () => { alive = false }
+  }, [report])
   const [revealAns, setRevealAns] = useState(false)
   const [open, setOpen] = useState(() => ({}))
   const [pick, setPick] = useState(() => ({}))
@@ -4453,6 +4550,66 @@ const EXTRA_CSS = `
 .up-logout{position:absolute;top:18px;right:20px;z-index:5;display:inline-flex;align-items:center;gap:6px;border:1px solid #e2e8f0;background:rgba(255,255,255,.9);color:#475569;font-size:12.5px;font-weight:600;padding:7px 13px;border-radius:10px;cursor:pointer;backdrop-filter:blur(4px)}
 .up-logout:hover{border-color:#DC2626;color:#DC2626}
 @media(max-width:620px){.disc-grid,.invite-grid{grid-template-columns:1fr}.ask-khoa{min-width:120px}.score-nx{padding-left:0}.risk-ten{min-width:120px}}
+.login-inner2{position:relative;z-index:1;width:100%;max-width:1120px;display:flex;flex-direction:column;gap:20px}
+.login-grid{display:grid;grid-template-columns:minmax(350px,410px) 1fr;gap:34px;align-items:stretch}
+.login-col-form{display:flex}
+.login-col-form .login-card{width:100%;max-width:none;margin:0}
+.login-col-hero{display:flex;flex-direction:column;justify-content:center;color:#eaf2ff;padding:10px 4px}
+.login-hero-tag{align-self:flex-start;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9fc6ff;background:rgba(125,200,255,.12);border:1px solid rgba(125,200,255,.25);padding:5px 12px;border-radius:20px;margin-bottom:16px}
+.login-hero-title{font-size:30px;line-height:1.25;font-weight:800;color:#fff;margin:0 0 14px;letter-spacing:-.5px}
+.login-hero-desc{font-size:14px;line-height:1.7;color:#bcd2f0;margin:0 0 20px;max-width:520px}
+.login-feat{display:flex;flex-direction:column;gap:11px;margin-bottom:22px}
+.login-feat-row{display:flex;align-items:center;gap:11px;font-size:13.5px;color:#dbe7fb;font-weight:500}
+.login-feat-ic{width:32px;height:32px;border-radius:9px;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.login-stats{display:flex;gap:14px;flex-wrap:wrap}
+.login-stat{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:13px 16px;min-width:118px}
+.login-stat-v{font-size:21px;font-weight:800;color:#fff}
+.login-stat-l{font-size:11.5px;color:#a8c4e8;line-height:1.4;margin-top:3px}
+.login-logos .logo-bar{flex-wrap:nowrap;justify-content:space-around;align-items:flex-end;gap:16px 24px;max-width:none;overflow-x:auto;padding:18px 16px 14px}
+.login-logos .logo-group{gap:9px}
+.login-logos .logo-group-lbl{font-size:11px}
+.login-logos .logo-group-imgs{gap:14px}
+.login-logos .logo-slot{height:54px;min-width:62px}
+.nav-right{gap:14px}
+.tab-group{gap:3px}
+.tb-group{gap:3px;padding:4px}
+.tb-btn{padding:8px 12px;gap:7px}
+@media(max-width:900px){.login-grid{grid-template-columns:1fr;max-width:430px;margin:0 auto}.login-col-hero{display:none}}
+.mode-cd{position:relative}
+.mode-cd-btn{display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid #d8e2f0;border-radius:11px;padding:8px 12px;font-size:13px;font-weight:600;color:#0F2740;cursor:pointer;transition:all .15s;min-width:176px}
+.mode-cd-btn:hover{border-color:#1D6FE8;box-shadow:0 1px 8px rgba(29,111,232,.12)}
+.mode-cd-btn.open{border-color:#1D6FE8;box-shadow:0 1px 8px rgba(29,111,232,.14)}
+.mode-cd-dot{width:7px;height:7px;border-radius:50%;background:#1D6FE8;flex-shrink:0}
+.mode-cd-chev{margin-left:auto;color:#7A96C8;transition:transform .18s}
+.mode-cd-btn.open .mode-cd-chev{transform:rotate(180deg)}
+.mode-cd-ov{position:fixed;inset:0;z-index:40}
+.mode-cd-list{position:absolute;top:calc(100% + 6px);left:0;min-width:210px;background:#fff;border:1px solid #e7eef8;border-radius:12px;box-shadow:0 10px 30px rgba(15,39,64,.16);padding:5px;z-index:41;animation:fadeIn .14s ease}
+.mode-cd-item{display:flex;align-items:center;gap:9px;width:100%;text-align:left;border:none;background:none;font-size:13px;font-weight:500;color:#334155;padding:9px 11px;border-radius:9px;cursor:pointer;transition:background .12s}
+.mode-cd-item:hover{background:#f1f6fd;color:#1D6FE8}
+.mode-cd-item.sel{background:rgba(29,111,232,.08);color:#1D6FE8;font-weight:600}
+.mode-cd-item svg{margin-left:auto}
+.nav-export{display:inline-flex;align-items:center;gap:7px;background:linear-gradient(135deg,#1D6FE8,#0E9488);color:#fff;border:none;border-radius:11px;padding:9px 15px;font-size:13px;font-weight:600;cursor:pointer;transition:filter .15s;white-space:nowrap}
+.nav-export:hover{filter:brightness(1.07)}
+.nav-menu-wrap{position:relative}
+.nav-burger{width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;background:#f1f5fb;border:1px solid #e2e8f0;border-radius:11px;cursor:pointer;transition:all .15s;padding:0}
+.nav-burger:hover{background:#e7eef8;border-color:#1D6FE8}
+.nav-menu-ov{position:fixed;inset:0;z-index:40}
+.nav-menu{position:absolute;top:calc(100% + 8px);right:0;min-width:212px;background:#fff;border:1px solid #e7eef8;border-radius:13px;box-shadow:0 12px 34px rgba(15,39,64,.18);padding:6px;z-index:41;animation:fadeIn .14s ease}
+.nav-menu button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:none;background:none;font-size:13px;font-weight:500;color:#334155;padding:10px 12px;border-radius:9px;cursor:pointer;transition:background .12s}
+.nav-menu button:hover{background:#f1f6fd}
+.nav-menu button.danger{color:#DC2626}
+.nav-menu button.danger:hover{background:#fef2f2}
+.note-text{width:100%;box-sizing:border-box;min-height:60px;border:1px solid #d8e2f0;border-radius:10px;padding:10px 12px;font-size:13px;font-family:inherit;resize:vertical;outline:none;margin-bottom:9px}
+.note-text:focus{border-color:#1D6FE8}
+.note-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.note-attach{display:inline-flex;align-items:center;gap:6px;border:none;background:#1D6FE8;color:#fff;font-size:12.5px;font-weight:600;padding:9px 14px;border-radius:10px;cursor:pointer}
+.note-attach:hover{filter:brightness(1.06)}
+.note-attach:disabled{opacity:.5;cursor:not-allowed}
+.note-upload{display:inline-flex;align-items:center;gap:7px;border:1px solid #cfe0f5;background:#fff;color:#1D6FE8;font-size:12.5px;font-weight:600;padding:9px 14px;border-radius:10px;cursor:pointer}
+.note-upload:hover{background:rgba(29,111,232,.06)}
+.rec-divider{display:flex;align-items:center;gap:10px;margin:13px 0 11px;color:#9fb2cc;font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.rec-divider:before,.rec-divider:after{content:"";flex:1;height:1px;background:#e2eaf4}
+.login-team{font-size:11.5px;font-weight:600;color:#a8c4e8;margin-bottom:14px;line-height:1.5}
 `
 
 export default function App() {
