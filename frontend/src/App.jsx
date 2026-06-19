@@ -2113,7 +2113,7 @@ function UploadPage({ onUpload, isLoading, loadingMsg, error, onDismissError, on
           <h1 className="hero-h1">Hồ sơ bệnh nhân<br /><em>phân tích trong 30 giây.</em></h1>
           <p className="hero-desc">Bác sĩ upload PDF xuất từ HIS. AI đọc toàn bộ hồ sơ, tổng hợp báo cáo có cấu trúc, phát hiện cảnh báo nguy cơ và sẵn sàng trả lời mọi câu hỏi lâm sàng.</p>
           <div className="feat-list">
-            {[[<Icon.FileText d={14}/>,"Trích xuất văn bản tự động từ PDF hồ sơ HIS"],[<Icon.Pulse d={14}/>,"Tóm tắt diễn biến lâm sàng theo dòng thời gian"],[<Icon.Alert d={14}/>,"Phát hiện cảnh báo nguy cơ dựa trên hồ sơ"],[<Icon.Chat d={14}/>,"Chatbot hỏi đáp về bệnh nhân cụ thể"]].map(([ic,text],i)=>(
+            {[[<Icon.FileText d={14}/>,"Tự động phân tích và tóm tắt diễn biến lâm sàng theo 3 giai đoạn."],[<Icon.Alert d={14}/>,"Phát hiện và cảnh báo sớm nguy cơ dựa trên hồ sơ bệnh án."],[<Icon.Stethoscope d={14}/>,"Hỗ trợ hội chẩn đa chuyên khoa (Virtual MDT) và giảng dạy từ Đại học Y Hà Nội (HMU)."],[<Icon.Chat d={14}/>,"Trợ lý ảo MedAmi hỏi đáp chuyên sâu cho từng hồ sơ cụ thể."]].map(([ic,text],i)=>(
               <div key={i} className="feat-item"><span className="feat-icon" style={{color:"#1D6FE8"}}>{ic}</span>{text}</div>
             ))}
           </div>
@@ -2229,14 +2229,8 @@ function UploadPage({ onUpload, isLoading, loadingMsg, error, onDismissError, on
           {!isLoading&&staged.length===0&&<div style={{textAlign:"center"}}><span className="demo-link" onClick={()=>onUpload(null)}>Xem demo: hồ sơ Nguyễn Văn A <span style={{fontSize:10}}>▶</span></span> <button className="hist-link" onClick={onOpenHistory}><Icon.FileText d={13} color="#1D6FE8"/>Lịch sử bệnh án</button></div>}
           {!isLoading && (
             <div className="rec-inline-wrap">
-              <div className="rec-inline-h"><Icon.Pulse d={13} color="#1D6FE8"/>Lời dặn của bác sĩ - nhập trực tiếp, tải file .txt hoặc ghi âm</div>
-              <textarea className="note-text" value={note} onChange={e=>setNote(e.target.value)} placeholder="Nhập lời dặn, chỉ định thêm hoặc lưu ý cho hồ sơ..."/>
-              <div className="note-actions">
-                <button className="note-attach" onClick={()=>{const v=note.trim();if(!v)return;setStaged(prev=>[...prev,{name:"Lời dặn bác sĩ",isAudio:true,tag:"LỜI DẶN",text:v,size:v.length}]);setNote("")}} disabled={!note.trim()}><Icon.Upload d={12} color="#fff"/>Đính kèm lời dặn</button>
-                <label className="note-upload"><Icon.FileText d={13} color="#1D6FE8"/>Tải lên .txt<input type="file" accept=".txt,text/plain" style={{display:"none"}} onChange={async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;try{const txt=await f.text();setStaged(prev=>[...prev,{name:f.name,isAudio:true,tag:"FILE .TXT",text:txt,size:f.size}])}catch{}e.target.value=""}}/></label>
-              </div>
-              <div className="rec-divider"><span>hoặc ghi âm giọng nói</span></div>
-              <AudioRecorder onAttach={(t)=>setStaged(prev=>[...prev,{name:"Ghi âm lời dặn", isAudio:true, tag:"GHI ÂM", text:t, size:t.length}])}/>
+              <div className="rec-inline-h"><Icon.Pulse d={13} color="#1D6FE8"/>Lời dặn của bác sĩ - gõ trực tiếp hoặc bấm micro để đọc</div>
+              <AudioRecorder value={note} onChange={setNote} onAttach={(t)=>{ setStaged(prev=>[...prev,{name:"Lời dặn bác sĩ", isAudio:true, tag:"LỜI DẶN", text:t, size:t.length}]); setNote("") }}/>
             </div>
           )}
         </div>
@@ -3878,10 +3872,10 @@ function LoginPage({ onLogin }){
     else setErr("Tên đăng nhập hoặc mật khẩu không đúng.")
   }
   const FEATURES = [
-    { ic:<Icon.FileText d={16} color="#1D6FE8"/>, t:"Tự động phân tích hồ sơ bệnh án theo 3 giai đoạn" },
-    { ic:<Icon.Stethoscope d={16} color="#0E9488"/>, t:"Hội chẩn đa chuyên khoa ảo (Virtual MDT)" },
-    { ic:<Icon.Brain d={16} color="#9333EA"/>, t:"Giảng dạy lâm sàng theo khung bệnh án HMU" },
-    { ic:<Icon.Chat d={16} color="#1D6FE8"/>, t:"Chatbot hỏi đáp riêng cho từng hồ sơ" },
+    { ic:<Icon.FileText d={16} color="#1D6FE8"/>, t:"Tự động phân tích và tóm tắt diễn biến lâm sàng theo 3 giai đoạn." },
+    { ic:<Icon.Alert d={16} color="#DC2626"/>, t:"Phát hiện và cảnh báo sớm nguy cơ dựa trên hồ sơ bệnh án." },
+    { ic:<Icon.Stethoscope d={16} color="#0E9488"/>, t:"Hỗ trợ hội chẩn đa chuyên khoa (Virtual MDT) và giảng dạy từ Đại học Y Hà Nội (HMU)." },
+    { ic:<Icon.Chat d={16} color="#9333EA"/>, t:"Trợ lý ảo MedAmi hỏi đáp chuyên sâu cho từng hồ sơ cụ thể." },
   ]
   const STATS = [
     { v:"~90%", l:"thời gian được tiết kiệm" },
@@ -3942,10 +3936,9 @@ function LoginPage({ onLogin }){
 }
 
 // ─── Ghi âm tài liệu hỗ trợ (Web Speech API vi-VN, có xử lý quyền + lỗi) ───────
-function AudioRecorder({ onAttach }){
+function AudioRecorder({ value, onChange, onAttach }){
   const [supported] = useState(() => typeof window!=="undefined" && !!(window.SpeechRecognition||window.webkitSpeechRecognition))
   const [rec, setRec] = useState(false)
-  const [text, setText] = useState("")
   const [err, setErr] = useState("")
   const ref = useRef(null)
   const ERR = {
@@ -3963,28 +3956,29 @@ function AudioRecorder({ onAttach }){
     try { if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) await navigator.mediaDevices.getUserMedia({audio:true}) }
     catch { setErr("Không truy cập được micro. Hãy cho phép quyền micro cho trang web rồi thử lại."); return }
     const r = new SR(); r.lang="vi-VN"; r.continuous=true; r.interimResults=true
-    const base = text ? text+" " : ""
-    r.onresult = (e) => { let live=""; for(let i=e.resultIndex;i<e.results.length;i++) live+=e.results[i][0].transcript; setText(base+live) }
+    const base = value ? value+" " : ""
+    r.onresult = (e) => { let live=""; for(let i=e.resultIndex;i<e.results.length;i++) live+=e.results[i][0].transcript; onChange && onChange(base+live) }
     r.onerror = (e) => { setErr(ERR[e.error] || ("Lỗi ghi âm: "+e.error)); setRec(false) }
     r.onend = () => setRec(false)
     ref.current = r
     try { r.start(); setRec(true) } catch { setErr("Không khởi động được ghi âm. Hãy thử lại sau giây lát.") }
   }
   const stop = () => { try{ ref.current && ref.current.stop() }catch{} setRec(false) }
-  const attach = () => { const v=(text||"").trim(); if(!v) return; onAttach && onAttach(v); setText(""); setErr("") }
+  const attach = () => { const v=(value||"").trim(); if(!v) return; onAttach && onAttach(v); setErr("") }
   return (
-    <div className="rec-inline">
-      <div className="rec-inline-row">
-        <button className={`rec-btn${rec?" on":""}`} onClick={rec?stop:start} disabled={!supported}>
-          <span className={`rec-dot${rec?" pulse":""}`}/>{rec?"Dừng ghi":"Ghi âm lời dặn"}
+    <div className={`smart-note${rec?" rec":""}`}>
+      <textarea className="smart-note-ta" value={value} onChange={e=>onChange && onChange(e.target.value)} placeholder="Nhập lời dặn, chỉ định thêm cho hồ sơ... hoặc bấm micro để đọc bằng giọng nói."/>
+      <div className="smart-note-bar">
+        <button type="button" className={`sn-mic${rec?" on":""}`} onClick={rec?stop:start} disabled={!supported} title={rec?"Dừng ghi":"Ghi âm bằng giọng nói"}>
+          {rec
+            ? <><span className="rec-dot pulse"/>Đang nghe...</>
+            : <><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>Ghi âm</>}
         </button>
-        {rec && <span className="rec-live">Đang nghe...</span>}
-        {text && !rec && <button className="rec-attach" onClick={attach}><Icon.Upload d={12} color="#fff"/>Đính kèm vào hồ sơ</button>}
-        {text && !rec && <button className="rec-clear" onClick={()=>setText("")}>Xóa</button>}
+        <span style={{flex:1}}/>
+        <button type="button" className="sn-send" onClick={attach} disabled={!(value||"").trim()}><Icon.Send d={13} color="#fff"/>Đính kèm</button>
       </div>
       {!supported && <div className="rec-note warn">Trình duyệt chưa hỗ trợ ghi âm giọng nói. Hãy dùng Chrome hoặc Edge mới nhất.</div>}
       {err && <div className="rec-note err"><Icon.Alert d={13} color="#B91C1C"/>{err}</div>}
-      {(rec||text) && <textarea className="rec-text" value={text} onChange={e=>setText(e.target.value)} placeholder="Nội dung ghi âm hiện ở đây theo thời gian thực; có thể chỉnh sửa trước khi đính kèm."/>}
     </div>
   )
 }
@@ -4610,6 +4604,21 @@ const EXTRA_CSS = `
 .rec-divider{display:flex;align-items:center;gap:10px;margin:13px 0 11px;color:#9fb2cc;font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
 .rec-divider:before,.rec-divider:after{content:"";flex:1;height:1px;background:#e2eaf4}
 .login-team{font-size:11.5px;font-weight:600;color:#a8c4e8;margin-bottom:14px;line-height:1.5}
+.smart-note{border:1px solid #d8e2f0;border-radius:13px;background:#fff;overflow:hidden;transition:border-color .15s}
+.smart-note:focus-within{border-color:#1D6FE8}
+.smart-note.rec{border-color:#0E9488}
+.smart-note-ta{display:block;width:100%;box-sizing:border-box;min-height:74px;border:none;outline:none;resize:vertical;padding:12px 13px;font-size:13.5px;font-family:inherit;color:#0F2740;background:transparent}
+.smart-note-bar{display:flex;align-items:center;gap:9px;padding:8px 10px;border-top:1px solid #eef3fa;background:#fafcff}
+.sn-mic{display:inline-flex;align-items:center;gap:7px;border:1px solid #d8e2f0;background:#fff;color:#475569;font-size:12.5px;font-weight:600;padding:7px 12px;border-radius:9px;cursor:pointer;transition:all .15s}
+.sn-mic:hover{border-color:#0E9488;color:#0E9488}
+.sn-mic.on{border-color:#0E9488;color:#0E9488;background:rgba(14,148,136,.08)}
+.sn-mic:disabled{opacity:.5;cursor:not-allowed}
+.sn-send{display:inline-flex;align-items:center;gap:7px;border:none;background:#1D6FE8;color:#fff;font-size:12.5px;font-weight:600;padding:8px 14px;border-radius:9px;cursor:pointer}
+.sn-send:hover{filter:brightness(1.06)}
+.sn-send:disabled{opacity:.45;cursor:not-allowed}
+.stats-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.login-stats{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.login-stat{min-width:0}
 `
 
 export default function App() {
