@@ -1469,12 +1469,30 @@ function buildChips(report) {
 
 
 // ─── PRINT ────────────────────────────────────────────────────────────────────
-function triggerPrint(r, mode) {
+function reportToText(r){
+  if(!r) return ""
+  const p = r.thong_tin_benh_nhan || {}
+  const L = []
+  L.push("BÁO CÁO LÂM SÀNG - MedParcours AI")
+  L.push(`Bệnh nhân: ${p.ho_ten||""} | ${p.tuoi||"?"} tuổi | ${p.gioi_tinh||""}`)
+  if(p.so_benh_an) L.push(`Số bệnh án: ${p.so_benh_an}`)
+  if(p.ngay_vao_vien||p.ngay_ra_vien) L.push(`Vào viện: ${p.ngay_vao_vien||"-"} | Ra viện: ${p.ngay_ra_vien||"-"}`)
+  if(r.chan_doan_chinh){ L.push(""); L.push("CHẨN ĐOÁN CHÍNH:"); L.push(r.chan_doan_chinh) }
+  if(r.tom_tat_toan_canh){ L.push(""); L.push("TÓM TẮT TOÀN CẢNH:"); L.push(r.tom_tat_toan_canh) }
+  if(r.clinical_takeaway && r.clinical_takeaway.length){ L.push(""); L.push("KẾT LUẬN NHANH:"); r.clinical_takeaway.forEach(t=>L.push("- "+t.txt)) }
+  if(r.problem_status && r.problem_status.hien_tai && r.problem_status.hien_tai.length){ L.push(""); L.push("TRẠNG THÁI VẤN ĐỀ:"); r.problem_status.hien_tai.forEach(x=>L.push("- "+x.ten+": "+(x.mo_ta||""))) }
+  if(r.hanh_dong_uu_tien && r.hanh_dong_uu_tien.length){ L.push(""); L.push("HÀNH ĐỘNG ƯU TIÊN:"); r.hanh_dong_uu_tien.forEach((a,i)=>L.push((i+1)+". "+(a.viec||"")+(a.ly_do?" ("+a.ly_do+")":""))) }
+  if(r.thuoc_cuoi_ky && r.thuoc_cuoi_ky.length){ L.push(""); L.push("THUỐC:"); r.thuoc_cuoi_ky.forEach(m=>L.push("- "+(m.ten_thuoc||"")+(m.lieu?" "+m.lieu:"")+(m.cach_dung?", "+m.cach_dung:""))) }
+  L.push(""); L.push("(Tạo bởi MedParcours AI. Cần bác sĩ xem xét trước khi dùng cho mục đích lâm sàng.)")
+  return L.join("\n")
+}
+function triggerPrint(r, mode, docNote) {
   const p = r.thong_tin_benh_nhan
   const PRINT_META = {
     clinical:{ title:"Báo cáo lâm sàng", label:"MedParcours AI: Báo cáo lâm sàng tự động" },
     hoi_chan:{ title:"Biên bản hội chẩn đa chuyên khoa", label:"MedParcours AI: Biên bản hội chẩn đa chuyên khoa (AI)" },
     teaching:{ title:"Tài liệu học tập ca lâm sàng", label:"MedParcours AI: Tài liệu học tập ca lâm sàng (giảng dạy)" },
+    full:{ title:"Bản bàn giao đầy đủ", label:"MedParcours AI: Bản bàn giao đầy đủ (Lâm sàng, Hội chẩn, Giảng dạy)" },
   }
   const meta = PRINT_META[mode] || PRINT_META.clinical
   const clinicalBody = `<h2>I. Chẩn đoán</h2><div class="row"><span class="lbl">Chẩn đoán chính:</span><span>${r.chan_doan_chinh}</span></div><div class="row"><span class="lbl">Lý do nhập viện:</span><span>${r.ly_do_vao_vien}</span></div><div class="row"><span class="lbl">Tiền sử:</span><span>${r.tien_su_benh}</span></div>
@@ -1515,9 +1533,11 @@ ${(()=>{const{findings,egfr,ctx}=runPriorityScreens(r);const s=checkDrugSafety(r
     h += `<h2>XIV. Câu hỏi vấn đáp (Socratic)</h2>` + (t.socratic||[]).map((s,k)=>`<div class="alert"><div class="al">Câu ${k+1}: ${s.q}</div><div class="as">Gợi ý đáp án: ${s.a}</div></div>`).join("")
     return h
   }
+  const sectionSep = (t)=>`<div style="margin:26pt 0 12pt;padding-bottom:6pt;border-bottom:2pt solid #1B5FCB;font-size:14pt;font-weight:700;color:#1B5FCB">${t}</div>`
   let bodyHtml = clinicalBody
   if(mode==="hoi_chan") bodyHtml = mdtPrintBody(r)
   else if(mode==="teaching") bodyHtml = teachingPrintBody(r)
+  else if(mode==="full") bodyHtml = sectionSep("PHẦN A - BÁO CÁO LÂM SÀNG") + clinicalBody + sectionSep("PHẦN B - BIÊN BẢN HỘI CHẨN ĐA CHUYÊN KHOA") + mdtPrintBody(r) + sectionSep("PHẦN C - TÀI LIỆU GIẢNG DẠY") + teachingPrintBody(r)
   const win = window.open("", "_blank", "width=900,height=700")
   win.document.write(`<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><title>${meta.title}: ${p.ho_ten}</title>
 <style>body{font-family:'Times New Roman',serif;color:#000;font-size:11pt;line-height:1.55;background:#fff;margin:0}.page{padding:18mm 16mm;max-width:210mm;margin:0 auto}h1{font-size:13pt;text-transform:uppercase;margin:0 0 2pt}h2{font-size:10pt;font-weight:700;text-transform:uppercase;border-bottom:1.5px solid #000;padding-bottom:3pt;margin:14pt 0 7pt}.hdr{border-bottom:2.5px solid #000;padding-bottom:10pt;margin-bottom:8pt;display:flex;justify-content:space-between}.hdr-r{text-align:right;font-size:9pt;color:#444}.sub{font-size:9pt;color:#444;margin:2pt 0}.row{display:flex;gap:6pt;font-size:10pt;margin:3pt 0}.lbl{color:#555;min-width:110pt}table{width:100%;border-collapse:collapse;font-size:10pt;margin:6pt 0 12pt}th{background:#eee;font-weight:700;text-align:left;padding:4pt 7pt;border:1px solid #aaa;font-size:9pt;text-transform:uppercase}td{padding:4pt 7pt;border:1px solid #ccc;vertical-align:top}tr:nth-child(even) td{background:#f9f9f9}.alert{border:1.5px solid #000;border-left:4px solid #000;padding:6pt 10pt;margin:5pt 0}.al{font-size:9pt;font-weight:700;text-transform:uppercase;margin-bottom:2pt}.as{font-size:9pt;color:#555}.footer{border-top:1px solid #999;margin-top:20pt;padding-top:7pt;font-size:8pt;color:#666;display:flex;justify-content:space-between}.stamp{border:1.5px solid #999;width:100pt;height:60pt;display:inline-block;margin-top:8pt;text-align:center;font-size:8pt;padding:5pt;color:#999}@media print{@page{size:A4;margin:18mm 16mm}}</style>
@@ -1525,6 +1545,7 @@ ${(()=>{const{findings,egfr,ctx}=runPriorityScreens(r);const s=checkDrugSafety(r
 <div class="hdr"><div><div style="font-size:9pt;text-transform:uppercase;letter-spacing:.1em;color:#555;margin-bottom:4pt">${meta.label}</div><h1>${p.ho_ten}</h1><div class="sub">Số bệnh án: ${p.so_benh_an} | ${p.tuoi} tuổi, ${p.gioi_tinh} | ${p.dia_chi}</div><div class="sub">Ngày sinh: ${p.ngay_sinh} | Vào viện: ${p.ngay_vao_vien} | Ra viện: ${p.ngay_ra_vien}</div></div><div class="hdr-r">In ngày: ${new Date().toLocaleDateString("vi-VN")}<br>MedParcours AI v1.2<br><span style="color:#c00;font-weight:700">Cần bác sĩ xác nhận</span></div></div>
 ${bodyHtml}
 <div style="display:flex;justify-content:space-between;margin-top:24pt"><div><div class="stamp">Xác nhận bác sĩ phụ trách</div></div><div><div class="stamp">Ký tên bác sĩ</div></div></div>
+${docNote && docNote.trim() ? `<h2>Ghi chú của bác sĩ</h2><div class="alert"><div class="as" style="white-space:pre-wrap">${docNote.replace(/&/g,"&amp;").replace(/</g,"&lt;")}</div></div>` : ""}
 <div class="footer"><span>Báo cáo tạo tự động bởi MedParcours AI v1.2. Cần bác sĩ xem xét trước khi dùng cho mục đích lâm sàng.</span><span>HackAIthon 2026</span></div>
 </div><script>window.onload=function(){window.print()}<\/script></body></html>`)
   win.document.close()
@@ -2123,7 +2144,7 @@ function LogoBar({ compact }) {
   )
 }
 
-function UploadPage({ onUpload, isLoading, loadingMsg, error, onDismissError, onOpenHistory, onLogout }) {
+function UploadPage({ onUpload, isLoading, loadingMsg, error, onDismissError, onRetry, onOpenHistory, onLogout }) {
   const [dragging, setDragging] = useState(false)
   const [staged, setStaged] = useState([])
   const [note, setNote] = useState("")
@@ -2206,6 +2227,11 @@ function UploadPage({ onUpload, isLoading, loadingMsg, error, onDismissError, on
                 <button className="upload-err-x" onClick={onDismissError}><Icon.Close d={13} color="#B91C1C"/></button>
               </div>
               <div className="upload-err-msg">{error}</div>
+              <div className="upload-err-hint">Máy chủ AI có thể đang khởi động lại sau thời gian không hoạt động. Bạn có thể thử lại sau vài giây, hoặc xem hồ sơ mẫu để trải nghiệm tính năng.</div>
+              <div className="upload-err-actions">
+                {onRetry && <button className="upload-err-retry" onClick={onRetry}><Icon.Pulse d={13} color="#fff"/>Thử lại</button>}
+                <button className="upload-err-demo" onClick={()=>onUpload(null)}>Xem hồ sơ mẫu</button>
+              </div>
             </div>
           )}
           {isLoading ? (
@@ -2355,6 +2381,15 @@ function ReportPage({ report, hoSoText, analysis, onReset, chatMessages, setChat
   const [tab, setTab] = useState("report")
   const [viewMode, setViewMode] = useState("clinical")
   const [menuOpen, setMenuOpen] = useState(false)
+  const noteKey = "mp_note_" + ((report && report.thong_tin_benh_nhan && report.thong_tin_benh_nhan.so_benh_an) || "x")
+  const [docNote, setDocNote] = useState("")
+  useEffect(() => { try { setDocNote(sessionStorage.getItem(noteKey) || "") } catch {} }, [noteKey])
+  const saveNote = (v) => { setDocNote(v); try { sessionStorage.setItem(noteKey, v) } catch {} }
+  const [zoom, setZoom] = useState(1)
+  const pkey = (report && report.thong_tin_benh_nhan && report.thong_tin_benh_nhan.so_benh_an) || "x"
+  const [bmOpen, setBmOpen] = useState(false)
+  const [bmList, setBmList] = useState([])
+  useEffect(() => { const h=()=>setBmList(bmGet(pkey)); h(); window.addEventListener("mp-bm",h); return ()=>window.removeEventListener("mp-bm",h) }, [pkey])
   const [query, setQuery] = useState("")
   const doSearch = useCallback(() => {
     const term = query.trim().toLowerCase()
@@ -2414,11 +2449,20 @@ function ReportPage({ report, hoSoText, analysis, onReset, chatMessages, setChat
   // Keyboard shortcut Ctrl+K to focus chat
   useEffect(() => {
     const handler = e => {
+      const tag = (e.target && e.target.tagName) || ""
+      const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (e.target && e.target.isContentEditable)
       if ((e.ctrlKey || e.metaKey) && e.key === "k") {
         e.preventDefault()
         setTab("chat")
         setTimeout(() => document.getElementById("chat-input-field")?.focus(), 100)
+        return
       }
+      if (e.key === "Escape") { setMenuOpen(false); return }
+      if (typing || e.ctrlKey || e.metaKey || e.altKey) return
+      if (e.key === "/") { e.preventDefault(); document.getElementById("rpt-search-input")?.focus(); return }
+      if (e.key === "1") { setViewMode("clinical"); mpToast("Chế độ: Bác sĩ (Lâm sàng)") }
+      else if (e.key === "2") { setViewMode("hoi_chan"); mpToast("Chế độ: Hội chẩn AI") }
+      else if (e.key === "3") { setViewMode("teaching"); mpToast("Chế độ: Học vụ (Giảng dạy)") }
     }
     window.addEventListener("keydown", handler)
     return () => window.removeEventListener("keydown", handler)
@@ -2451,8 +2495,9 @@ function ReportPage({ report, hoSoText, analysis, onReset, chatMessages, setChat
                 <button key={key} className={`tab-btn${tab===key?" active":""}`} onClick={()=>setTab(key)}>{ic} {label}</button>
               ))}
             </div>
+            <FocusToggle/>
             <ThemeToggle/>
-            <button className="nav-export" onClick={()=>triggerPrint(report, viewMode)} title="Xuất báo cáo"><Icon.Print d={14} color="#fff"/>Xuất báo cáo</button>
+            <button className="nav-export" onClick={()=>triggerPrint(report, viewMode, docNote)} title="Xuất báo cáo"><Icon.Print d={14} color="#fff"/>Xuất báo cáo</button>
             <div className="nav-menu-wrap">
               <button className="nav-burger" onClick={()=>setMenuOpen(o=>!o)} title="Menu" aria-label="Menu">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#334155" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
@@ -2461,6 +2506,15 @@ function ReportPage({ report, hoSoText, analysis, onReset, chatMessages, setChat
                 <div className="nav-menu-ov" onClick={()=>setMenuOpen(false)}/>
                 <div className="nav-menu">
                   <button onClick={()=>{setMenuOpen(false);onOpenHistory()}}><Icon.Clock d={14} color="#475569"/>Lịch sử bệnh án</button>
+                  <button onClick={()=>{setMenuOpen(false);triggerPrint(report,"full",docNote)}}><Icon.FileText d={14} color="#475569"/>Xuất bản đầy đủ (3 chế độ)</button>
+                  <button onClick={()=>{setMenuOpen(false); (async()=>{ try{ await navigator.clipboard.writeText(reportToText(report)); mpToast("Đã sao chép toàn bộ báo cáo") }catch{ mpToast("Không sao chép được","err") } })()}}><Icon.FileText d={14} color="#475569"/>Sao chép toàn bộ báo cáo</button>
+                  <button onClick={()=>{setMenuOpen(false);setBmOpen(true)}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>Mục đã đánh dấu ({bmList.length})</button>
+                  <div className="nav-menu-font" onClick={e=>e.stopPropagation()}>
+                    <span>Cỡ chữ</span>
+                    <button onClick={()=>setZoom(z=>Math.max(0.85,+(z-0.1).toFixed(2)))} title="Nhỏ hơn">A-</button>
+                    <button onClick={()=>setZoom(1)} title="Mặc định">A</button>
+                    <button onClick={()=>setZoom(z=>Math.min(1.4,+(z+0.1).toFixed(2)))} title="Lớn hơn">A+</button>
+                  </div>
                   <button onClick={async()=>{setMenuOpen(false); if(await mpConfirm({title:"Phân tích hồ sơ mới?",message:"Báo cáo đang xem sẽ được đóng lại. Bạn có thể mở lại trong Lịch sử bệnh án.",okText:"Tiếp tục"})) onReset()}}><Icon.Back d={13} color="#475569"/>Hồ sơ mới</button>
                   <button className="danger" onClick={async()=>{setMenuOpen(false); if(await mpConfirm({title:"Đăng xuất khỏi MedParcours AI?",message:"Bạn sẽ quay lại màn hình đăng nhập.",okText:"Đăng xuất",danger:true})) onLogout()}}><Icon.Close d={13} color="#DC2626"/>Đăng xuất</button>
                 </div>
@@ -2477,7 +2531,7 @@ function ReportPage({ report, hoSoText, analysis, onReset, chatMessages, setChat
           {chips.map(c=><span key={c.label} className={`chip-tag ${c.cls}`}>{c.label}</span>)}
           <div className="rpt-search">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7A96C8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")doSearch()}} placeholder="Tìm trong báo cáo..."/>
+            <input id="rpt-search-input" value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")doSearch();if(e.key==="Escape")e.target.blur()}} placeholder="Tìm trong báo cáo... (phím /)"/>
             {query && <button className="rpt-search-x" onClick={()=>setQuery("")} title="Xóa"><Icon.Close d={11} color="#7A96C8"/></button>}
           </div>
         </div>
@@ -2487,11 +2541,11 @@ function ReportPage({ report, hoSoText, analysis, onReset, chatMessages, setChat
         viewMode === "clinical" ? (
           <div className="report-outer">
             <SidebarMinimap activeId={activeSection} onNavigate={navigateTo}/>
-            <div className="report-main"><ReportTab report={report} analysis={analysis}/></div>
+            <div className="report-main" style={{zoom}}><ReportTab report={report} analysis={analysis}/></div>
           </div>
         ) : (
           <div className="report-outer">
-            <div className="report-main" style={{maxWidth:"none"}}>
+            <div className="report-main" style={{maxWidth:"none", zoom}}>
               {viewMode === "hoi_chan" ? <MDTView report={report}/> : <TeachingView report={report}/>}
             </div>
           </div>
@@ -2505,6 +2559,9 @@ function ReportPage({ report, hoSoText, analysis, onReset, chatMessages, setChat
         <FloatingChat report={report} hoSoText={hoSoText} messages={chatMessages} setMessages={setChatMessages} mode={viewMode}
           onExpand={()=>setTab("chat")}/>
       )}
+      <DoctorNote value={docNote} onChange={saveNote}/>
+      {bmOpen && <BookmarkPanel pkey={pkey} items={bmList} onClose={()=>setBmOpen(false)}/>}
+      <ReadProgress/>
       <ScrollToTop/>
     </div>
   )
@@ -2814,14 +2871,15 @@ const PROB_META = {
   monitoring: { label:"Cần theo dõi",   color:"#D97706" },
   urgent:     { label:"Cần xử lý ngay", color:"#DC2626" },
 }
-function ProblemStatus({ data }) {
+function ProblemStatus({ data, pkey }) {
   const [collapsed, setCollapsed] = useState(false)
   if (!data) return null
   return (
     <div id="sec-problems" className="ov-card">
       <div className="ov-head">
         <Icon.Octagon d={16} color="#1D6FE8"/><span>Trạng thái vấn đề lâm sàng</span>
-        <button className="banner-collapse dark" onClick={()=>setCollapsed(c=>!c)} title={collapsed?"Mở":"Thu gọn"} style={{ marginLeft:"auto" }}>
+        <span style={{marginLeft:"auto",display:"inline-flex",gap:"6px",alignItems:"center"}}><CopyBtn text={()=>((data.hien_tai)||[]).map(p=>`${p.ten}: ${p.mo_ta||""}`).join("\n")} label="Sao chép"/></span>
+        <button className="banner-collapse dark" onClick={()=>setCollapsed(c=>!c)} title={collapsed?"Mở":"Thu gọn"} style={{ marginLeft:"6px" }}>
           {collapsed ? <Icon.ChevDown d={14} color="#1D6FE8"/> : <Icon.ChevUp d={14} color="#1D6FE8"/>}
         </button>
       </div>
@@ -2836,7 +2894,7 @@ function ProblemStatus({ data }) {
                   <div key={i} className="prob-item">
                     <span className="prob-dot" style={{ background:m.color }}/>
                     <div className="prob-body">
-                      <div className="prob-top"><span className="prob-name">{p.ten}</span><span className="prob-tag" style={{ color:m.color, borderColor:m.color+"55" }}>{m.label}</span></div>
+                      <div className="prob-top"><span className="prob-name">{p.ten}</span><span className="prob-tag" style={{ color:m.color, borderColor:m.color+"55" }}>{m.label}</span><FlagBtn pkey={pkey} label={p.ten} sub={p.mo_ta||"Vấn đề lâm sàng đang theo dõi"}/></div>
                       {p.mo_ta && <div className="prob-desc">{p.mo_ta}</div>}
                     </div>
                   </div>
@@ -2864,13 +2922,48 @@ function ProblemStatus({ data }) {
   )
 }
 
-function ClinicalTakeaway({ items }) {
+function bmKey(pkey){ return "mp_bm_" + (pkey||"x") }
+function bmGet(pkey){ try{ return JSON.parse(sessionStorage.getItem(bmKey(pkey))||"[]") }catch{ return [] } }
+function bmSet(pkey, arr){ try{ sessionStorage.setItem(bmKey(pkey), JSON.stringify(arr)) }catch{} ; if(typeof window!=="undefined") window.dispatchEvent(new CustomEvent("mp-bm",{detail:{pkey}})) }
+function bmToggle(pkey, item){ const arr=bmGet(pkey); const i=arr.findIndex(x=>x.label===item.label); let added; if(i>=0){ arr.splice(i,1); added=false } else { arr.push({label:item.label, sub:item.sub||"", ts:Date.now()}); added=true } bmSet(pkey,arr); return added }
+function bmHas(pkey,label){ return bmGet(pkey).some(x=>x.label===label) }
+function FlagBtn({ pkey, label, sub }){
+  const [on,setOn]=useState(()=>bmHas(pkey,label))
+  useEffect(()=>{ const h=()=>setOn(bmHas(pkey,label)); window.addEventListener("mp-bm",h); return ()=>window.removeEventListener("mp-bm",h) },[pkey,label])
+  const toggle=(e)=>{ e.stopPropagation(); const a=bmToggle(pkey,{label,sub}); mpToast(a?"Đã đánh dấu để theo dõi":"Đã bỏ đánh dấu") }
+  return (
+    <button className={`flag-btn${on?" on":""}`} onClick={toggle} title={on?"Bỏ đánh dấu":"Đánh dấu để theo dõi"} aria-label="Đánh dấu theo dõi">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill={on?"currentColor":"none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+    </button>
+  )
+}
+function BookmarkPanel({ pkey, items, onClose }){
+  return (
+    <div className="bm-ov" onClick={onClose}>
+      <div className="bm-panel" onClick={e=>e.stopPropagation()}>
+        <div className="bm-head"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/></svg><span>Mục đã đánh dấu theo dõi</span><button className="dn-x" onClick={onClose} aria-label="Đóng"><Icon.Close d={14} color="#64748B"/></button></div>
+        <div className="bm-body">
+          {(!items || items.length===0) && <div className="bm-empty">Chưa có mục nào được đánh dấu. Bấm biểu tượng cờ ở mỗi kết luận hoặc vấn đề lâm sàng để thêm vào đây theo dõi.</div>}
+          {items.map((it,i)=>(
+            <div key={i} className="bm-item">
+              <span className="bm-flag"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/></svg></span>
+              <div className="bm-main"><div className="bm-label">{it.label}</div>{it.sub && <div className="bm-sub">{it.sub}</div>}</div>
+              <button className="bm-x" onClick={()=>bmToggle(pkey,{label:it.label})} title="Bỏ đánh dấu"><Icon.Close d={13} color="#94A3B8"/></button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+function ClinicalTakeaway({ items, pkey }) {
   const [collapsed, setCollapsed] = useState(false)
   if (!items || !items.length) return null
   return (
     <div id="sec-takeaway" className="takeaway-card">
       <div className="takeaway-hd"><Icon.Stethoscope d={15} color="#1D6FE8"/><span>Kết luận lâm sàng nhanh</span>
-        <button className="banner-collapse dark" onClick={()=>setCollapsed(c=>!c)} title={collapsed?"Mở":"Thu gọn"} style={{ marginLeft:"auto" }}>
+        <span style={{marginLeft:"auto",display:"inline-flex",gap:"6px",alignItems:"center"}}><CopyBtn text={()=>items.map(i=>i.txt).join("\n")} label="Sao chép"/></span>
+        <button className="banner-collapse dark" onClick={()=>setCollapsed(c=>!c)} title={collapsed?"Mở":"Thu gọn"} style={{ marginLeft:"6px" }}>
           {collapsed ? <Icon.ChevDown d={14} color="#1D6FE8"/> : <Icon.ChevUp d={14} color="#1D6FE8"/>}
         </button>
       </div>
@@ -2880,6 +2973,7 @@ function ClinicalTakeaway({ items }) {
             <li key={i} className={t.loai}>
               <span className="takeaway-mark" style={{ color:t.loai==="good"?"#059669":"#D97706" }}>{t.loai==="good"?"✓":"!"}</span>
               {t.txt}
+              <FlagBtn pkey={pkey} label={t.txt} sub="Kết luận lâm sàng nhanh"/>
             </li>
           ))}
         </ul>
@@ -2895,7 +2989,8 @@ function NextActions({ items }) {
   return (
     <div id="sec-actions" className="next-actions">
       <div className="next-hd"><Icon.ShieldCheck d={16} color="#B45309"/><span>Hành động ưu tiên ở lần tái khám tới</span>
-        <button className="banner-collapse dark" onClick={()=>setCollapsed(c=>!c)} title={collapsed?"Mở":"Thu gọn"} style={{ marginLeft:"auto" }}>
+        <span style={{marginLeft:"auto",display:"inline-flex",gap:"6px",alignItems:"center"}}><CopyBtn text={()=>items.map((a,i)=>`${i+1}. ${a.viec||""}${a.ly_do?" - "+a.ly_do:""}`).join("\n")} label="Sao chép"/></span>
+        <button className="banner-collapse dark" onClick={()=>setCollapsed(c=>!c)} title={collapsed?"Mở":"Thu gọn"} style={{ marginLeft:"6px" }}>
           {collapsed ? <Icon.ChevDown d={14} color="#B45309"/> : <Icon.ChevUp d={14} color="#B45309"/>}
         </button>
       </div>
@@ -2983,6 +3078,40 @@ function ClinicalReasoning({ items }) {
 }
 
 // ─── LAB PANEL (lọc Cao / Bình thường / Thấp + nhận xét xu hướng) ───────────────
+const GLOSSARY = {
+  EF:"Phân suất tống máu thất trái (Ejection Fraction). Bình thường 55-70%. Phản ánh khả năng bơm máu của tim.",
+  INR:"Chỉ số đông máu chuẩn hóa quốc tế. Theo dõi khi dùng kháng vitamin K. Van cơ học thường mục tiêu 2.0-3.0.",
+  NTPROBNP:"Chỉ điểm sinh học của suy tim. Tăng cao khi tim quá tải hoặc suy tim nặng hơn.",
+  BNP:"Peptide lợi niệu type B, chỉ điểm suy tim. Tăng khi tim chịu áp lực hoặc thể tích quá mức.",
+  CRP:"Protein phản ứng C, dấu ấn viêm. Bình thường dưới 5 mg/L. Tăng trong nhiễm khuẩn hoặc viêm.",
+  WBC:"Số lượng bạch cầu. Tăng gợi ý nhiễm khuẩn hoặc viêm cấp.",
+  HB:"Huyết sắc tố (Hemoglobin). Giảm là thiếu máu, ảnh hưởng vận chuyển oxy.",
+  PLT:"Số lượng tiểu cầu, liên quan đông cầm máu.",
+  CREA:"Creatinin huyết thanh, phản ánh chức năng lọc của thận. Tăng gợi ý suy giảm chức năng thận.",
+  EGFR:"Mức lọc cầu thận ước tính, đánh giá chức năng thận và liều thuốc thải qua thận.",
+  NA:"Natri máu, rối loạn điện giải hay gặp ở bệnh nhân tim mạch, suy tim.",
+  K:"Kali máu, ảnh hưởng nhịp tim. Cả tăng và giảm đều nguy hiểm.",
+  TROPONIN:"Dấu ấn tổn thương cơ tim. Tăng trong nhồi máu cơ tim hoặc tổn thương tim.",
+  LACTATE:"Lactat máu, tăng khi giảm tưới máu mô hoặc sốc.",
+  DDIMER:"Sản phẩm thoái giáng fibrin, tăng khi có huyết khối hoặc đông máu hoạt hóa.",
+  AST:"Men gan (aspartate transaminase), tăng khi tổn thương gan hoặc cơ.",
+  ALT:"Men gan (alanine transaminase), đặc hiệu hơn cho tế bào gan.",
+  GLUCOSE:"Đường huyết, theo dõi đái tháo đường và stress chuyển hóa.",
+  HBA1C:"Đường huyết trung bình 2-3 tháng, đánh giá kiểm soát đái tháo đường.",
+  PT:"Thời gian prothrombin, đánh giá con đường đông máu ngoại sinh.",
+  APTT:"Thời gian thromboplastin hoạt hóa, đánh giá con đường đông máu nội sinh.",
+}
+function glossKey(t){ return String(t||"").toUpperCase().replace(/[^A-Z0-9]/g,"") }
+function TermTip({ term, children }){
+  const tip = GLOSSARY[glossKey(term)]
+  if(!tip) return <>{children}</>
+  return (
+    <span className="term-tip" tabIndex={0}>
+      {children}<span className="term-q">?</span>
+      <span className="term-pop">{tip}</span>
+    </span>
+  )
+}
 function LabPanel({ labs, note }) {
   const [filter, setFilter] = useState("all")
   const counts = { high:0, normal:0, low:0 }
@@ -3021,7 +3150,7 @@ function LabPanel({ labs, note }) {
           return (
             <div key={m.key} className="lab-cell">
               <div className="lab-top">
-                <span className="lab-key">{m.key}</span>
+                <TermTip term={m.key}><span className="lab-key">{m.key}</span></TermTip>
                 <span className={`lab-status ${m.status}`}>{statusTxt}</span>
               </div>
               <div className="lab-val-row">
@@ -3281,6 +3410,42 @@ function HeroStatus({ info, findings, trajectory }) {
   )
 }
 
+function ReadProgress(){
+  const [pct, setPct] = useState(0)
+  useEffect(() => {
+    const on = () => {
+      const h = document.documentElement
+      const max = h.scrollHeight - h.clientHeight
+      setPct(max > 0 ? Math.min(100, (h.scrollTop / max) * 100) : 0)
+    }
+    window.addEventListener("scroll", on, { passive:true }); on()
+    return () => window.removeEventListener("scroll", on)
+  }, [])
+  return <div className="read-progress"><div className="read-progress-bar" style={{ width: pct + "%" }}/></div>
+}
+function TimelineStrip({ events }){
+  if(!events || events.length < 2) return null
+  const tone = (l) => l==="canh_bao" ? {c:"#DC2626",bg:"#FEE2E2",t:"Cảnh báo"} : l==="bat_thuong" ? {c:"#D97706",bg:"#FEF3C7",t:"Theo dõi"} : {c:"#0E9488",bg:"#D1FAE5",t:"Ổn định"}
+  return (
+    <div className="tls-card">
+      <div className="tls-head"><Icon.Clock d={15} color="#1D6FE8"/><span>Dòng thời gian diễn biến</span><span className="tls-hint">cuộn ngang để xem</span></div>
+      <div className="tls-scroll">
+        <div className="tls-track">
+          {events.map((e,i)=>{ const tn=tone(e.loai); return (
+            <div className="tls-item" key={i}>
+              <div className="tls-date">{e.ngay}</div>
+              <div className="tls-dotwrap"><span className="tls-dot" style={{background:tn.c}}/></div>
+              <div className="tls-box">
+                <span className="tls-tag" style={{color:tn.c,background:tn.bg}}>{tn.t}</span>
+                <span className="tls-txt">{e.mo_ta}</span>
+              </div>
+            </div>
+          )})}
+        </div>
+      </div>
+    </div>
+  )
+}
 function ReportTab({ report: r, analysis }) {
   const [tlFilter, setTlFilter] = useState("all")
   const [modalSource, setModalSource] = useState(null)
@@ -3374,9 +3539,10 @@ function ReportTab({ report: r, analysis }) {
 
       {/* Banner trạng thái + Kết luận nhanh + Trạng thái vấn đề + Hành động */}
       <div id="sec-status"><ClinicalStatusBanner info={phaseInfo} report={r}/></div>
-      {r.clinical_takeaway && <ClinicalTakeaway items={r.clinical_takeaway}/>}
+      <TimelineStrip events={r.dien_bien_lam_sang}/>
+      {r.clinical_takeaway && <ClinicalTakeaway items={r.clinical_takeaway} pkey={r.thong_tin_benh_nhan && r.thong_tin_benh_nhan.so_benh_an}/>}
 
-      {r.problem_status && <ProblemStatus data={r.problem_status}/>}
+      {r.problem_status && <ProblemStatus data={r.problem_status} pkey={r.thong_tin_benh_nhan && r.thong_tin_benh_nhan.so_benh_an}/>}
       {r.hanh_dong_uu_tien && r.hanh_dong_uu_tien.length > 0 && <NextActions items={r.hanh_dong_uu_tien}/>}
 
       {/* BA GIAI ĐOẠN (chỉ khi xác định được mốc phẫu thuật) */}
@@ -3491,6 +3657,24 @@ function renderMd(text) {
 }
 
 // ─── FLOATING CHAT (kiểu Messenger) ───────────────────────────────────────────
+function DoctorNote({ value, onChange }){
+  const [open, setOpen] = useState(false)
+  const pencil = <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+  return (
+    <>
+      <button className="dn-fab" onClick={()=>setOpen(o=>!o)} title="Ghi chú của bác sĩ" aria-label="Ghi chú của bác sĩ">
+        {pencil}{value && value.trim() && <span className="dn-dot"/>}
+      </button>
+      {open && (
+        <div className="dn-panel">
+          <div className="dn-head">{pencil}<span>Ghi chú của bác sĩ</span><button className="dn-x" onClick={()=>setOpen(false)} aria-label="Đóng"><Icon.Close d={13} color="#64748B"/></button></div>
+          <textarea className="dn-ta" value={value} onChange={e=>onChange(e.target.value)} placeholder="Nhập nhận định, lưu ý, kế hoạch theo dõi cho hồ sơ này. Ghi chú được tự lưu và gộp vào báo cáo khi bạn xuất/in."/>
+          <div className="dn-foot">{(value||"").trim().length} ký tự · tự lưu · in kèm báo cáo</div>
+        </div>
+      )}
+    </>
+  )
+}
 function FloatingChat({ report, hoSoText, messages, setMessages, onExpand, mode }) {
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState("")
@@ -4558,6 +4742,136 @@ body.theme-dark .smart-note-bar{background:#131D2E;border-color:var(--border)}
 body.theme-dark .tb-group,body.theme-dark .tab-group,body.theme-dark .echo-seg{background:#1B2536}
 body.theme-dark .cfm{background:#1B2536;color:var(--navy)}
 body.theme-dark .prio-box,body.theme-dark .invite{background:#1B2536;border-color:var(--border)}
+
+/* ===== DARK MODE v2: toi han, chu sang ===== */
+body.theme-dark{background:#0A1220;color:#EAF1FB}
+body.theme-dark .upload-page,body.theme-dark .report-outer,body.theme-dark .report-main,body.theme-dark .mode-wrap{background:transparent}
+body.theme-dark .nav,body.theme-dark .chip-bar,body.theme-dark .topbar{background:#0E1828;border-color:#28364E}
+body.theme-dark .hero-status,body.theme-dark .stage-card,body.theme-dark .fp-modal,body.theme-dark .fp-frame,body.theme-dark .modal-box,body.theme-dark .hist-modal,body.theme-dark .fc-panel,body.theme-dark .spec-card,body.theme-dark .prio-col,body.theme-dark .prio-box,body.theme-dark .reason-phase,body.theme-dark .rf,body.theme-dark .ask-q,body.theme-dark .teach-q,body.theme-dark .dc-opt,body.theme-dark .cfm,body.theme-dark .nav-menu,body.theme-dark .mode-cd-list,body.theme-dark .mode-cd-btn,body.theme-dark .rpt-search,body.theme-dark .smart-note,body.theme-dark .note-upload,body.theme-dark .mode-card,body.theme-dark .invite,body.theme-dark .echo-tbl-wrap,body.theme-dark .ecmp,body.theme-dark .summary-card,body.theme-dark .stat-block,body.theme-dark .hist-panel,body.theme-dark .login-card,body.theme-dark .thread-bub,body.theme-dark .ask-txt,body.theme-dark .ask-cons,body.theme-dark .teach-p{background:#161F33;border-color:#28364E;color:#EAF1FB}
+body.theme-dark .card{background:#141D2F;border-color:#28364E}
+body.theme-dark .card-head{background:#101A2C;border-color:#28364E}
+body.theme-dark .tb-group,body.theme-dark .tab-group,body.theme-dark .echo-seg,body.theme-dark .mode-cd,body.theme-dark .prio-counts{background:#1C2740}
+body.theme-dark input,body.theme-dark textarea,body.theme-dark select,body.theme-dark .smart-note-ta,body.theme-dark .ecmp-pick select{background:#0F1A2C;color:#EAF1FB;border-color:#28364E}
+body.theme-dark .smart-note-bar{background:#13203353;border-color:#28364E}
+body.theme-dark .sidebar-item:hover{background:#1A2438;color:#EAF1FB}
+body.theme-dark .sidebar-item.active{background:#1E2B44;color:#7FB0FF;border-color:#2F4368}
+body.theme-dark .ask-khoa,body.theme-dark .cfm-t,body.theme-dark .dc-q,body.theme-dark .hist-name,body.theme-dark .hist-title,body.theme-dark .invite-name,body.theme-dark .login-brand,body.theme-dark .mdt-block-t,body.theme-dark .mdt-op-name,body.theme-dark .mdt-step-t,body.theme-dark .mode-cd-btn,body.theme-dark .mode-dd,body.theme-dark .prio-ten,body.theme-dark .rec-inline-h,body.theme-dark .rec-title,body.theme-dark .rpt-search,body.theme-dark .score-overall,body.theme-dark .score-ten,body.theme-dark .smart-note-ta,body.theme-dark .spec-name,body.theme-dark .teach-q-t,body.theme-dark .teach-sec-t,body.theme-dark .teach-soc-t,body.theme-dark .ul-pair,body.theme-dark .ask-cons,body.theme-dark .ask-txt,body.theme-dark .dc-opt,body.theme-dark .mdt-final,body.theme-dark .mode-cd-item,body.theme-dark .nav-menu,body.theme-dark .ol-num,body.theme-dark .risk-ten,body.theme-dark .teach-chip,body.theme-dark .teach-p,body.theme-dark .thread-bub,body.theme-dark .ul-clean,body.theme-dark .cfm-cancel,body.theme-dark .conf,body.theme-dark .hist-dx,body.theme-dark .prio-ly,body.theme-dark .rec-clear,body.theme-dark .rel,body.theme-dark .rf-yn,body.theme-dark .sn-mic,body.theme-dark .spec-gap,body.theme-dark .stance,body.theme-dark .tb-btn,body.theme-dark .teach-q-a,body.theme-dark .teach-q-fb,body.theme-dark .theme-toggle,body.theme-dark .up-logout,body.theme-dark .card-title,body.theme-dark .stat-label{color:#EAF1FB}
+body.theme-dark .stat-sub,body.theme-dark .invite-role,body.theme-dark .prio-ly,body.theme-dark .spec-gap,body.theme-dark .hist-dx,body.theme-dark .ecmp-lbl,body.theme-dark .ecmp-notes{color:#A8BBD6}
+body.theme-dark .copy-btn{background:#1C2740;border-color:#2F4368;color:#7FB0FF}
+body.theme-dark .report-nav{background:rgba(12,20,34,0.94);border-color:#28364E}
+body.theme-dark .logo-text,body.theme-dark .logo-sub,body.theme-dark .patient-name,body.theme-dark .patient-meta,body.theme-dark .chip-lbl,body.theme-dark .nav-patient{color:#EAF1FB}
+body.theme-dark .nav-sep{color:#3C5878}
+body.theme-dark .patient-meta{background:rgba(91,149,242,0.16)}
+body.theme-dark .patient-avatar{background:#1E2B44;color:#7FB0FF}
+body.theme-dark .hero-title,body.theme-dark .hero-sub,body.theme-dark .up-title,body.theme-dark .up-sub,body.theme-dark .hero-feat-item{color:#EAF1FB}
+body.theme-dark .chip-bar{background:#0E1828}
+.term-tip{position:relative;cursor:help;display:inline-flex;align-items:center;gap:3px}
+.term-q{display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;border-radius:50%;background:var(--blue-lt);color:var(--blue);font-size:9px;font-weight:800;line-height:1;flex-shrink:0}
+.term-pop{display:none;position:absolute;bottom:calc(100% + 8px);left:0;width:232px;background:#102942;color:#fff;font-size:11.5px;font-weight:500;line-height:1.55;text-transform:none;letter-spacing:0;padding:9px 11px;border-radius:9px;box-shadow:0 8px 24px rgba(15,39,64,.28);z-index:60;white-space:normal}
+.term-pop:after{content:"";position:absolute;top:100%;left:14px;border:5px solid transparent;border-top-color:#102942}
+.term-tip:hover .term-pop,.term-tip:focus .term-pop{display:block}
+body.theme-dark .term-pop{background:#1C2740;color:#EAF1FB;border:1px solid #2F4368}
+body.theme-dark .term-pop:after{border-top-color:#1C2740}
+body.theme-dark .term-q{background:#1E2B44;color:#7FB0FF}
+.upload-err-hint{font-size:12px;color:#9A4B2E;margin-top:8px;line-height:1.55}
+.upload-err-actions{display:flex;gap:9px;margin-top:11px;flex-wrap:wrap}
+.upload-err-retry{display:inline-flex;align-items:center;gap:6px;border:none;background:#DC2626;color:#fff;font-size:12.5px;font-weight:600;padding:8px 14px;border-radius:9px;cursor:pointer}
+.upload-err-retry:hover{filter:brightness(1.07)}
+.upload-err-demo{border:1px solid #FECACA;background:#fff;color:#B91C1C;font-size:12.5px;font-weight:600;padding:8px 14px;border-radius:9px;cursor:pointer}
+.upload-err-demo:hover{background:#FEF2F2}
+body.focus-mode .sidebar{display:none}
+body.focus-mode .chip-bar{display:none}
+body.focus-mode .report-outer{max-width:1000px;gap:0}
+body.focus-mode .report-main{padding:0 6px}
+body.focus-mode .report-nav{box-shadow:none}
+.dn-fab{position:fixed;left:24px;bottom:24px;z-index:90;width:50px;height:50px;border-radius:50%;border:none;background:linear-gradient(135deg,#0E9488,#1D6FE8);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 8px 22px rgba(14,148,136,.35)}
+.dn-fab:hover{filter:brightness(1.07)}
+.dn-dot{position:absolute;top:9px;right:9px;width:10px;height:10px;border-radius:50%;background:#FBBF24;border:2px solid #fff}
+.dn-panel{position:fixed;left:24px;bottom:84px;z-index:91;width:322px;max-width:calc(100vw - 48px);background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:0 18px 44px rgba(15,39,64,.22);overflow:hidden;animation:fadeIn .16s ease}
+.dn-head{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--border);font-size:13px;font-weight:700;color:var(--navy)}
+.dn-head span{flex:1}
+.dn-x{border:none;background:none;cursor:pointer;display:flex;padding:0}
+.dn-ta{display:block;width:100%;box-sizing:border-box;min-height:144px;border:none;outline:none;resize:vertical;padding:12px 14px;font-size:13px;font-family:inherit;color:var(--navy);background:transparent;line-height:1.55}
+.dn-foot{padding:8px 14px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);background:#FAFBFD}
+body.theme-dark .dn-panel{background:#161F33;border-color:#28364E}
+body.theme-dark .dn-head{color:#EAF1FB;border-color:#28364E}
+body.theme-dark .dn-ta{color:#EAF1FB}
+body.theme-dark .dn-foot{background:#10192A;border-color:#28364E;color:#A8BBD6}
+body.theme-dark .dn-dot{border-color:#161F33}
+body.focus-mode .dn-fab{opacity:.35}
+.tls-card{background:var(--glass);border:1px solid var(--border);border-radius:14px;padding:14px 4px 14px 16px;margin:12px 0}
+.tls-head{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--navy);margin-bottom:12px;padding-right:14px}
+.tls-head span:first-of-type{flex:1}
+.tls-hint{font-size:11px;font-weight:500;color:var(--muted)}
+.tls-scroll{overflow-x:auto;padding-bottom:6px}
+.tls-track{display:flex;gap:0;min-width:min-content;position:relative}
+.tls-track:before{content:"";position:absolute;left:0;right:0;top:46px;height:2px;background:var(--border)}
+.tls-item{flex:0 0 200px;display:flex;flex-direction:column;align-items:center;padding:0 8px}
+.tls-date{font-size:11.5px;font-weight:700;color:var(--navy2);margin-bottom:8px}
+.tls-dotwrap{position:relative;z-index:1;height:18px;display:flex;align-items:center}
+.tls-dot{width:13px;height:13px;border-radius:50%;border:3px solid var(--glass);box-shadow:0 0 0 1px var(--border)}
+.tls-box{margin-top:8px;background:var(--page-bg);border:1px solid var(--border);border-radius:10px;padding:9px 11px;width:100%;box-sizing:border-box;min-height:74px}
+.tls-tag{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;margin-bottom:5px}
+.tls-txt{display:block;font-size:11.5px;color:var(--muted2);line-height:1.5}
+body.theme-dark .tls-box{background:#0F1A2C;border-color:#28364E}
+body.theme-dark .tls-dot{border-color:#161F33}
+.read-progress{position:fixed;top:0;left:0;right:0;height:3px;background:transparent;z-index:120;pointer-events:none}
+.read-progress-bar{height:100%;background:linear-gradient(90deg,#1D6FE8,#0E9488);transition:width .1s linear;box-shadow:0 0 6px rgba(29,111,232,.4)}
+body.focus-mode .read-progress{height:4px}
+.nav-menu-font{display:flex;align-items:center;gap:6px;padding:9px 12px;font-size:13px;font-weight:500;color:#334155;border-top:1px solid var(--border);margin-top:4px}
+.nav-menu-font span{flex:1}
+.nav-menu-font button{width:32px;height:28px;border:1px solid var(--border);background:#fff;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;color:#1D6FE8;display:inline-flex;align-items:center;justify-content:center}
+.nav-menu-font button:hover{background:#f1f6fd}
+body.theme-dark .nav-menu-font{color:#C7D4E6;border-color:#2F4368}
+body.theme-dark .nav-menu-font button{background:#1B2536;border-color:#2F4368;color:#7FB0FF}
+.flag-btn{border:none;background:none;cursor:pointer;color:#CBD5E1;padding:2px;display:inline-flex;align-items:center;vertical-align:middle;margin-left:6px;transition:color .15s}
+.flag-btn:hover{color:#D97706}
+.flag-btn.on{color:#D97706}
+.takeaway-card li{position:relative}
+.prob-top{display:flex;align-items:center;gap:6px}
+.prob-top .flag-btn{margin-left:auto}
+.bm-ov{position:fixed;inset:0;z-index:130;background:rgba(15,39,64,.45);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:20px;animation:toastIn .15s ease}
+.bm-panel{background:#fff;border-radius:16px;width:420px;max-width:100%;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(15,39,64,.3);overflow:hidden}
+.bm-head{display:flex;align-items:center;gap:9px;padding:14px 16px;border-bottom:1px solid var(--border);font-size:14px;font-weight:700;color:var(--navy)}
+.bm-head svg{color:#D97706}
+.bm-head span{flex:1}
+.bm-body{padding:8px;overflow-y:auto}
+.bm-empty{padding:26px 18px;text-align:center;color:var(--muted);font-size:12.5px;line-height:1.65}
+.bm-item{display:flex;align-items:flex-start;gap:10px;padding:11px 12px;border-radius:10px}
+.bm-item:hover{background:#f7f9fc}
+.bm-flag{color:#D97706;margin-top:1px;flex-shrink:0;display:inline-flex}
+.bm-main{flex:1;min-width:0}
+.bm-label{font-size:13px;font-weight:600;color:var(--navy);line-height:1.45}
+.bm-sub{font-size:11.5px;color:var(--muted2);margin-top:3px;line-height:1.5}
+.bm-x{border:none;background:none;cursor:pointer;padding:2px;flex-shrink:0}
+body.theme-dark .bm-panel{background:#161F33}
+body.theme-dark .bm-head{color:#EAF1FB;border-color:#28364E}
+body.theme-dark .bm-item:hover{background:#1B2536}
+body.theme-dark .bm-label{color:#EAF1FB}
+@media(max-width:860px){
+  .report-outer{padding:14px 12px 48px;gap:0}
+  .sidebar{display:none}
+  .report-nav-inner{padding:6px 12px;height:auto;min-height:52px;flex-wrap:wrap;gap:6px 8px}
+  .nav-right{gap:7px;flex-wrap:wrap;justify-content:flex-end}
+  .patient-meta{display:none}
+  .mode-dd-lbl{display:none}
+}
+@media(max-width:600px){
+  .stats-row{grid-template-columns:1fr}
+  .prio-board{grid-template-columns:1fr}
+  .disc-grid,.invite-grid,.score-grid,.med-grid,.dc-opts{grid-template-columns:1fr !important}
+  .tls-item{flex-basis:172px}
+  .dn-fab{left:14px;bottom:14px;width:46px;height:46px}
+  .dn-panel{left:14px;bottom:70px}
+  .fc-panel{max-width:calc(100vw - 28px)}
+  .nav-export{padding:8px 11px}
+  .login-hero-title{font-size:24px}
+  .ecmp-pick select{flex:1;min-width:0}
+  .ecmp-row{grid-template-columns:1fr 1fr auto 1fr}
+  .ecmp-lbl{grid-column:1/-1}
+}
+
+
 .mdt-ket{margin:0 26px;border:1px solid #eef3fa;border-radius:14px;padding:16px 18px;background:#fbfdff}
 .mdt-block{margin-bottom:14px;padding-left:12px;border-left:3px solid #1D6FE8}
 .mdt-block.green{border-color:#22C55E}.mdt-block.red{border-color:#EF4444}.mdt-block.blue{border-color:#1D6FE8}.mdt-block.teal{border-color:#0E9488}
@@ -4909,6 +5223,23 @@ function ThemeToggle(){
   )
 }
 
+function FocusToggle(){
+  const [on, setOn] = useState(false)
+  const toggle = () => {
+    const v = !on
+    setOn(v)
+    document.body.classList.toggle("focus-mode", v)
+    mpToast(v ? "Đã bật chế độ trình chiếu" : "Đã tắt chế độ trình chiếu")
+  }
+  return (
+    <button className="theme-toggle" onClick={toggle} title={on?"Thoát trình chiếu":"Chế độ trình chiếu (ẩn bớt khung viền)"} aria-label="Chế độ trình chiếu">
+      {on
+        ? <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/></svg>
+        : <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>}
+    </button>
+  )
+}
+
 export default function App() {
   const [authed, setAuthed] = useState(() => { try { return sessionStorage.getItem("mp_auth")==="1" } catch { return false } })
   const login = () => { try { sessionStorage.setItem("mp_auth","1") } catch {} setAuthed(true) }
@@ -4919,6 +5250,7 @@ export default function App() {
   const [analysis, setAnalysis] = useState(null)
   const [loading, setLoading] = useState(false)
   const [loadingMsg, setLoadingMsg] = useState("")
+  const [lastFile, setLastFile] = useState(null)
   const [uploadError, setUploadError] = useState(null)
   const [chatMessages, setChatMessages] = useState([])
   const [showHistory, setShowHistory] = useState(false)
@@ -4951,6 +5283,7 @@ export default function App() {
       setReport(MOCK_REPORT); setHoSoText(JSON.stringify(MOCK_REPORT)); setAnalysis(null)
       initChat(MOCK_REPORT); setCurrentId("BN-A"); setState("report"); return
     }
+    setLastFile(file)
     setLoading(true); setUploadError(null); setLoadingMsg("")
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), 240000)  // 240s cho hồ sơ rất dày
@@ -5033,7 +5366,7 @@ export default function App() {
       <style>{CSS}</style>
       <style>{EXTRA_CSS}</style>
       <ErrorBoundary>
-        {state === "upload" && <UploadPage onUpload={handleUpload} isLoading={loading} loadingMsg={loadingMsg} error={uploadError} onDismissError={()=>setUploadError(null)} onOpenHistory={()=>setShowHistory(true)} onLogout={logout}/>}
+        {state === "upload" && <UploadPage onUpload={handleUpload} isLoading={loading} loadingMsg={loadingMsg} error={uploadError} onDismissError={()=>setUploadError(null)} onRetry={()=>lastFile && handleUpload(lastFile)} onOpenHistory={()=>setShowHistory(true)} onLogout={logout}/>}
         {state === "report" && report && (
           <ReportPage report={report} hoSoText={hoSoText} analysis={analysis}
             onReset={()=>{setState("upload");setReport(null);setAnalysis(null);setChatMessages([]);setCurrentId(null)}}
