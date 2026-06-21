@@ -5071,6 +5071,285 @@ body.theme-dark .sidebar::-webkit-scrollbar-thumb,body.theme-dark .bm-body::-web
 button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 .prio-box-name{display:flex;align-items:flex-start;gap:6px}
 .prio-box-name .flag-btn{margin-left:auto;margin-top:1px}
+
+/* Them Darkmode */
+body.theme-dark .phase-chip:not(.lead) {
+  background: #1B2A42;
+  color: #E2EAF5;
+  border-color: #38506F;
+}
+/* =========================
+   DARK MODE CONTRAST FIXES
+   ========================= */
+
+/* 1) Chẩn đoán hình ảnh qua 3 giai đoạn */
+body.theme-dark .echo-tl-modes{
+  background:#1C2740;
+  border-color:#2F4368;
+}
+body.theme-dark .echo-tl-modes button{
+  color:#C7D4E6;
+}
+body.theme-dark .echo-tl-modes button.on{
+  background:#F8FBFF;
+  color:#1D6FE8;
+}
+
+body.theme-dark .ai-insight{
+  background:#1A2536;
+  border-color:#324866;
+}
+body.theme-dark .ai-insight-text{
+  color:#E6EEF9;
+}
+body.theme-dark .ai-insight-tag,
+body.theme-dark .ai-insight-text strong{
+  color:#7FB0FF;
+}
+
+/* 2) Chi tiết 9 lượt siêu âm */
+body.theme-dark .echo-seg{
+  background:#1C2740;
+  border-color:#2F4368;
+}
+body.theme-dark .echo-seg button{
+  color:#C7D4E6;
+}
+body.theme-dark .echo-seg button.on{
+  background:#F8FBFF;
+  color:#1D6FE8;
+}
+
+body.theme-dark .echo-tbl-scroll{
+  border-color:#2A3A52;
+}
+body.theme-dark .echo-tbl th{
+  background:#1A2536;
+  color:#EAF1FB;
+  border-bottom-color:#2A3A52;
+}
+body.theme-dark .echo-tbl td{
+  color:#D6E2F2;
+  border-bottom-color:#24344B;
+}
+body.theme-dark .echo-tbl tr.latest{
+  background:#1C2B42;
+}
+body.theme-dark .echo-tbl tr.warn{
+  background:#3A2024;
+}
+body.theme-dark .echo-phase-pill{
+  font-weight:700;
+}
+
+/* ô ghi chú trong bảng siêu âm */
+.echo-note-cell{
+  font-size:11px;
+  color:#5A7BB8;
+}
+body.theme-dark .echo-note-cell{
+  color:#CFE0F5;
+}
+body.theme-dark .echo-note-cell.warn{
+  color:#FFD1D1;
+}
+body.theme-dark .echo-note-bullets li{
+  color:inherit;
+}
+
+/* 3) Diễn biến lâm sàng theo giai đoạn */
+body.theme-dark .reason-title,
+body.theme-dark .reason-body,
+body.theme-dark .reason-bullets li{
+  color:#EAF1FB;
+}
+body.theme-dark .reason-bullets,
+body.theme-dark .reason-body{
+  border-top-color:#324866;
+}
+
+/* badge giai đoạn trong phần reasoning */
+body.theme-dark .reason-phase{
+  background:rgba(255,255,255,0.08) !important;
+  border-color:currentColor !important;
+  font-weight:800;
+}
+
+/* chip trong timeline phase */
+body.theme-dark .phase-chip:not(.lead){
+  background:#1B2A42;
+  color:#E2EAF5;
+  border-color:#38506F;
+}
+body.theme-dark .phase-chip.lead{
+  background:#2A3750;
+  color:#FFFFFF;
+  border-color:#4A6790;
+}
+
+/* 4) Đơn thuốc và lịch dùng */
+body.theme-dark .med-item{
+  background:#1A2536;
+  border-color:#2A3A52;
+}
+body.theme-dark .med-name{
+  color:#EAF1FB;
+}
+body.theme-dark .med-nhom{
+  color:#7FB0FF;
+}
+body.theme-dark .med-dose{
+  color:#C6D5E8;
+}
+body.theme-dark .med-period{
+  color:#BFD0E5;
+}
+body.theme-dark .med-status.done{
+  background:#E2E8F0;
+  color:#475569;
+}
+body.theme-dark .med-status.active{
+  background:#DCFCE7;
+  color:#047857;
+}
+body.theme-dark .med-status.unknown{
+  background:#FEF3C7;
+  color:#B45309;
+}
+
+body.theme-dark .gantt-wrap{
+  background:#141E2C;
+  border-color:#2A3A52;
+}
+body.theme-dark .gantt-title,
+body.theme-dark .gantt-label-name{
+  color:#EAF1FB;
+}
+body.theme-dark .gantt-label-date,
+body.theme-dark .gantt-axis-track span{
+  color:#AFC3DD;
+}
+body.theme-dark .gantt-track{
+  background:#1C2740;
+}
+body.theme-dark .gantt-grid-line{
+  background:#324866;
+}
+
+/* 5) Kiểm tra an toàn đơn thuốc */
+
+/* QUAN TRỌNG:
+   rule cũ này quá rộng:
+   body.theme-dark .drug-egfr-box * { color:#C6D5E8 }
+   nó làm tag/pill bị nhạt.
+   Phần bên dưới sẽ override lại cho đúng. */
+
+body.theme-dark .drug-egfr-lbl,
+body.theme-dark .drug-egfr-note,
+body.theme-dark .egfr-inputs{
+  color:#C6D5E8;
+}
+body.theme-dark .egfr-inputs b{
+  color:#FFFFFF;
+}
+
+body.theme-dark .drug-egfr-tag.ok{
+  background:#DCFCE7;
+  color:#047857 !important;
+}
+body.theme-dark .drug-egfr-tag.warn{
+  background:#FEF3C7;
+  color:#B45309 !important;
+}
+body.theme-dark .drug-egfr-tag.crit{
+  background:#FEE2E2;
+  color:#B91C1C !important;
+}
+
+body.theme-dark .mf{
+  background:#1A2536;
+  color:#EAF1FB;
+}
+body.theme-dark .mf-op{
+  color:#AFC3DD;
+}
+
+/* alert card bên trong drug safety */
+body.theme-dark .drug-section-hd{
+  color:#EAF1FB;
+}
+body.theme-dark .drug-alert{
+  background:#F8FAFC !important;
+  border-color:#CBD5E1 !important;
+}
+body.theme-dark .drug-pair,
+body.theme-dark .drug-conseq,
+body.theme-dark .drug-suggest{
+  color:#0F2740;
+}
+body.theme-dark .drug-suggest strong{
+  color:#0B1F2A;
+}
+body.theme-dark .drug-caution{
+  background:#FFF7D6;
+  border-color:#FCD34D;
+  color:#7C2D12;
+}
+body.theme-dark .drug-caution b{
+  color:#B45309;
+}
+body.theme-dark .prio-src{
+  background:#EAF2FF;
+  border-color:#BFDBFE;
+  color:#1D4ED8;
+}
+body.theme-dark .drug-disclaimer{
+  color:#AFC3DD;
+  border-top-color:#2A3A52;
+}
+/* Sửa độ tương phản phần Biện luận lâm sàng */
+body.theme-dark .reason-item{
+  background:#1A2536 !important;
+  border-color:#3A4D69 !important;
+}
+
+body.theme-dark .reason-item .reason-title{
+  color:#FFFFFF !important;
+}
+
+body.theme-dark .reason-item .reason-bullets li,
+body.theme-dark .reason-item .reason-body{
+  color:#DCE7F5 !important;
+}
+
+body.theme-dark .reason-item .reason-bullets,
+body.theme-dark .reason-item .reason-body{
+  border-top-color:#415571 !important;
+}
+/* Tóm tắt toàn cảnh - dark mode */
+body.theme-dark .summary-phase{
+  background:#1A2536 !important;
+  border-color:#3A4D69 !important;
+}
+
+body.theme-dark .summary-phase .bullet-list li{
+  color:#E2EBF7 !important;
+}
+
+body.theme-dark .summary-phase .bullet-list li::before{
+  background:#60A5FA;
+}
+
+/* Tiêu đề từng giai đoạn */
+body.theme-dark .summary-phase-title{
+  font-weight:800;
+}
+
+/* Giữ số thứ tự nổi rõ */
+body.theme-dark .summary-phase-num{
+  color:#FFFFFF !important;
+}
+
 @media(max-width:860px){
   .report-outer{padding:14px 12px 48px;gap:0}
   .sidebar{display:none}
