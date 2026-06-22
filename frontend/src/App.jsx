@@ -517,7 +517,7 @@ const CSS = `
   .echo-seg button:hover{color:var(--blue)}
   .echo-seg button.on{background:#fff;color:var(--blue);box-shadow:0 1px 4px rgba(29,111,232,0.15)}
   .echo-tbl-scroll{overflow-x:auto;border:1px solid rgba(200,220,255,0.4);border-radius:12px}
-  .echo-tbl{width:100%;border-collapse:collapse;font-size:12px;min-width:560px}
+  .echo-tbl{width:100%;border-collapse:collapse;font-size:12px;min-width:780px}
   .echo-tbl th{text-align:left;padding:9px 12px;background:rgba(235,244,255,0.7);color:var(--navy3);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid rgba(200,220,255,0.5);white-space:nowrap}
   .echo-tbl td{padding:9px 12px;border-bottom:1px solid rgba(200,220,255,0.25);color:var(--navy3);vertical-align:top}
   .echo-tbl tr:last-child td{border-bottom:none}
@@ -577,7 +577,7 @@ const CSS = `
   .summary-phase{border:1px solid;border-radius:13px;padding:12px 15px}
   .summary-phase-hd{display:flex;align-items:center;gap:8px;margin-bottom:7px}
   .summary-phase-num{width:20px;height:20px;border-radius:50%;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-  .summary-phase-title{font-size:12px;font-weight:700;letter-spacing:.3px;text-transform:uppercase}
+  .summary-phase-title{font-size:13px;font-weight:700;letter-spacing:.2px;line-height:1.4}
   .reason-list{display:flex;flex-direction:column;gap:10px}
   .reason-filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
   .reason-bullets{margin:9px 0 0;padding:9px 0 0 4px;border-top:1px dashed rgba(200,220,255,0.5);display:flex;flex-direction:column;gap:5px}
@@ -1939,8 +1939,14 @@ function EchoTimeline({ sieu_am, info }) {
   const innerW = W - PAD.l - PAD.r, innerH = H - PAD.t - PAD.b
   const n = sessions.length
 
-  // EF trục trái 30-80, chênh áp trục phải 0-80
-  const EF_MIN = 30, EF_MAX = 80, GR_MAX = 80
+  // EF trục trái + chênh áp trục phải: tính theo dữ liệu để không tràn biểu đồ
+  const _efVals = sessions.filter(s => s.ef != null).map(s => s.ef)
+  const _grVals = sessions.filter(s => s.grad_max != null).map(s => s.grad_max)
+  const EF_MIN = Math.min(30, _efVals.length ? Math.floor((Math.min(..._efVals) - 5) / 10) * 10 : 30)
+  const EF_MAX = Math.max(80, _efVals.length ? Math.ceil((Math.max(..._efVals) + 5) / 10) * 10 : 80)
+  const GR_MAX = Math.max(80, _grVals.length ? Math.ceil((Math.max(..._grVals) * 1.12) / 20) * 20 : 80)
+  const efTicks = []; for (let v = EF_MIN; v <= EF_MAX; v += 10) efTicks.push(v)
+  const grTicks = []; const _grStep = GR_MAX > 120 ? 40 : 20; for (let v = 0; v <= GR_MAX; v += _grStep) grTicks.push(v)
   const x   = (i) => PAD.l + (i / (n - 1)) * innerW
   const efY = (v) => PAD.t + innerH - ((v - EF_MIN) / (EF_MAX - EF_MIN)) * innerH
   const grY = (v) => PAD.t + innerH - (v / GR_MAX) * innerH
@@ -2002,14 +2008,14 @@ function EchoTimeline({ sieu_am, info }) {
         </>}
 
         {/* Lưới ngang theo EF */}
-        {[30,40,50,60,70,80].map(v => (
+        {efTicks.map(v => (
           <g key={v}>
             <line x1={PAD.l} x2={W - PAD.r} y1={efY(v)} y2={efY(v)} stroke="rgba(200,220,255,0.25)" strokeWidth="1" />
             {mode!=="grad" && <text x={PAD.l - 5} y={efY(v)} textAnchor="end" fontSize="8" fill="#1D6FE8" dominantBaseline="middle">{v}</text>}
           </g>
         ))}
         {/* Nhãn trục phải chênh áp */}
-        {mode!=="ef" && [0,20,40,60,80].map(v => (
+        {mode!=="ef" && grTicks.map(v => (
           <text key={v} x={W - PAD.r + 5} y={grY(v)} textAnchor="start" fontSize="8" fill="#D97706" dominantBaseline="middle">{v}</text>
         ))}
         {mode!=="grad" && <text x={PAD.l - 5} y={PAD.t - 14} textAnchor="end" fontSize="8" fill="#1D6FE8" fontWeight="700">EF%</text>}
@@ -2152,8 +2158,8 @@ function EchoSessionTable({ sieu_am }) {
                   <td><span className="echo-phase-pill" style={{ background:pm.bg, borderColor:pm.border, color:pm.color }}>{pm.label}</span></td>
                   <td style={{ fontWeight:700, color:s.canh_bao?"#DC2626":s.ef!=null&&s.ef<55?"#D97706":"#1D3A6E" }}>{s.ef!=null?`${s.ef}%`:"-"}</td>
                   <td style={{ whiteSpace:"nowrap" }}>{s.grad_max!=null?`${s.grad_max}${s.grad_tb!=null?"/"+s.grad_tb:""} mmHg`:"-"}</td>
-                  <td style={{ whiteSpace:"nowrap" }}>{s.hoc||"-"}</td>
-                  <td style={{ fontSize:11, color:s.canh_bao?"#B91C1C":"#5A7BB8" }}>
+                  <td style={{ minWidth:130, maxWidth:210 }}>{s.hoc||"-"}</td>
+                  <td style={{ fontSize:11, color:s.canh_bao?"#B91C1C":"#5A7BB8", minWidth:230 }}>
                     {(() => {
                       const txt = expandAbbr(s.ghi_chu)
                       if (!txt) return "-"
@@ -2698,7 +2704,7 @@ function TrajectoryCard({ assessment }) {
     ? <Svg d={20} color="#fff"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></Svg>
     : tm.icon === "down"
     ? <Svg d={20} color="#fff"><polyline points="3 7 9 13 13 9 21 17"/><polyline points="15 17 21 17 21 11"/></Svg>
-    : <Svg d={20} color="#fff"><line x1="4" y1="12" x2="20" y2="12"/><polyline points="16 8 20 12 16 16"/></Svg>
+    : <Svg d={20} color="#fff"><polyline points="3 15 9 12 13 13 21 8"/><polyline points="16 8 21 8 21 13"/></Svg>
   return (
     <div id="sec-trajectory" className="traj-card" style={{ background:tm.bg, borderColor:tm.border }}>
       <div className="traj-head">
@@ -3528,7 +3534,7 @@ function HeroStatus({ info, findings, trajectory }) {
     ? <Svg d={18} color="#fff"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></Svg>
     : tm.icon === "down"
     ? <Svg d={18} color="#fff"><polyline points="3 7 9 13 13 9 21 17"/><polyline points="15 17 21 17 21 11"/></Svg>
-    : <Svg d={18} color="#fff"><line x1="4" y1="12" x2="20" y2="12"/><polyline points="16 8 20 12 16 16"/></Svg>
+    : <Svg d={18} color="#fff"><polyline points="3 15 9 12 13 13 21 8"/><polyline points="16 8 21 8 21 13"/></Svg>
   return (
     <div className="hero-status" style={{ ["--hero-accent"]: phaseColor }}>
       <div className="hero-status-phase">
@@ -5376,388 +5382,206 @@ body.theme-dark .ul-pair li{background:#141E2C;border-color:#2A3A52}
 body.theme-dark .ul-pair li b{color:#E2EBF7}
 body.theme-dark .ul-pair li span{color:#9FB3CC}
 body.theme-dark .teach-chip{background:#1A2536;color:#C6D5E8;border-color:#2A3A52}
-/* ===== DARK v4.5: Update contrast color */
-/* Them Darkmode */
-body.theme-dark .phase-chip:not(.lead) {
-  background: #1B2A42;
-  color: #E2EAF5;
-  border-color: #38506F;
-}
-/* =========================
-   DARK MODE CONTRAST FIXES
-   ========================= */
+
+/* ===== DARK v4.5: Update contrast color ===== */
+/* Thêm Darkmode */
+body.theme-dark .phase-chip:not(.lead) { background:#1B2A42; color:#E2EAF5; border-color:#38506F; }
+
+/* ========================= DARK MODE CONTRAST FIXES ========================= */
 
 /* 1) Chẩn đoán hình ảnh qua 3 giai đoạn */
-body.theme-dark .echo-tl-modes{
-  background:#1C2740;
-  border-color:#2F4368;
-}
-body.theme-dark .echo-tl-modes button{
-  color:#C7D4E6;
-}
-body.theme-dark .echo-tl-modes button.on{
-  background:#F8FBFF;
-  color:#1D6FE8;
-}
-
-body.theme-dark .ai-insight{
-  background:#1A2536;
-  border-color:#324866;
-}
-body.theme-dark .ai-insight-text{
-  color:#E6EEF9;
-}
-body.theme-dark .ai-insight-tag,
-body.theme-dark .ai-insight-text strong{
-  color:#7FB0FF;
-}
+body.theme-dark .echo-tl-modes { background:#1C2740; border-color:#2F4368; }
+body.theme-dark .echo-tl-modes button { color:#C7D4E6; }
+body.theme-dark .echo-tl-modes button.on { background:#F8FBFF; color:#1D6FE8; }
+body.theme-dark .ai-insight { background:#1A2536; border-color:#324866; }
+body.theme-dark .ai-insight-text { color:#E6EEF9; }
+body.theme-dark .ai-insight-tag, body.theme-dark .ai-insight-text strong { color:#7FB0FF; }
 
 /* 2) Chi tiết 9 lượt siêu âm */
-body.theme-dark .echo-seg{
-  background:#1C2740;
-  border-color:#2F4368;
-}
-body.theme-dark .echo-seg button{
-  color:#C7D4E6;
-}
-body.theme-dark .echo-seg button.on{
-  background:#F8FBFF;
-  color:#1D6FE8;
-}
+body.theme-dark .echo-seg { background:#1C2740; border-color:#2F4368; }
+body.theme-dark .echo-seg button { color:#C7D4E6; }
+body.theme-dark .echo-seg button.on { background:#F8FBFF; color:#1D6FE8; }
+body.theme-dark .echo-tbl-scroll { border-color:#2A3A52; }
+body.theme-dark .echo-tbl th { background:#1A2536; color:#EAF1FB; border-bottom-color:#2A3A52; }
+body.theme-dark .echo-tbl td { color:#D6E2F2; border-bottom-color:#24344B; }
+body.theme-dark .echo-tbl tr.latest { background:#1C2B42; }
+body.theme-dark .echo-tbl tr.warn { background:#3A2024; }
+body.theme-dark .echo-phase-pill { font-weight:700; }
 
-body.theme-dark .echo-tbl-scroll{
-  border-color:#2A3A52;
-}
-body.theme-dark .echo-tbl th{
-  background:#1A2536;
-  color:#EAF1FB;
-  border-bottom-color:#2A3A52;
-}
-body.theme-dark .echo-tbl td{
-  color:#D6E2F2;
-  border-bottom-color:#24344B;
-}
-body.theme-dark .echo-tbl tr.latest{
-  background:#1C2B42;
-}
-body.theme-dark .echo-tbl tr.warn{
-  background:#3A2024;
-}
-body.theme-dark .echo-phase-pill{
-  font-weight:700;
-}
-
-/* ô ghi chú trong bảng siêu âm */
-.echo-note-cell{
-  font-size:11px;
-  color:#5A7BB8;
-}
-body.theme-dark .echo-note-cell{
-  color:#CFE0F5;
-}
-body.theme-dark .echo-note-cell.warn{
-  color:#FFD1D1;
-}
-body.theme-dark .echo-note-bullets li{
-  color:inherit;
-}
+/* Ô ghi chú trong bảng siêu âm */
+.echo-note-cell { font-size:11px; color:#5A7BB8; }
+body.theme-dark .echo-note-cell { color:#CFE0F5; }
+body.theme-dark .echo-note-cell.warn { color:#FFD1D1; }
+body.theme-dark .echo-note-bullets li { color:inherit; }
 
 /* 3) Diễn biến lâm sàng theo giai đoạn */
-body.theme-dark .reason-title,
-body.theme-dark .reason-body,
-body.theme-dark .reason-bullets li{
-  color:#EAF1FB;
-}
-body.theme-dark .reason-bullets,
-body.theme-dark .reason-body{
-  border-top-color:#324866;
-}
+body.theme-dark .reason-title, body.theme-dark .reason-body, body.theme-dark .reason-bullets li { color:#EAF1FB; }
+body.theme-dark .reason-bullets, body.theme-dark .reason-body { border-top-color:#324866; }
 
-/* badge giai đoạn trong phần reasoning */
-body.theme-dark .reason-phase{
-  background:rgba(255,255,255,0.08) !important;
-  border-color:currentColor !important;
-  font-weight:800;
-}
+/* Badge giai đoạn trong phần reasoning */
+body.theme-dark .reason-phase { background:rgba(255,255,255,0.08) !important; border-color:currentColor !important; font-weight:800; }
 
-/* chip trong timeline phase */
-body.theme-dark .phase-chip:not(.lead){
-  background:#1B2A42;
-  color:#E2EAF5;
-  border-color:#38506F;
-}
-body.theme-dark .phase-chip.lead{
-  background:#2A3750;
-  color:#FFFFFF;
-  border-color:#4A6790;
-}
+/* Chip trong timeline phase */
+body.theme-dark .phase-chip:not(.lead) { background:#1B2A42; color:#E2EAF5; border-color:#38506F; }
+body.theme-dark .phase-chip.lead { background:#2A3750; color:#FFFFFF; border-color:#4A6790; }
 
 /* 4) Đơn thuốc và lịch dùng */
-body.theme-dark .med-item{
-  background:#1A2536;
-  border-color:#2A3A52;
-}
-body.theme-dark .med-name{
-  color:#EAF1FB;
-}
-body.theme-dark .med-nhom{
-  color:#7FB0FF;
-}
-body.theme-dark .med-dose{
-  color:#C6D5E8;
-}
-body.theme-dark .med-period{
-  color:#BFD0E5;
-}
-body.theme-dark .med-status.done{
-  background:#E2E8F0;
-  color:#475569;
-}
-body.theme-dark .med-status.active{
-  background:#DCFCE7;
-  color:#047857;
-}
-body.theme-dark .med-status.unknown{
-  background:#FEF3C7;
-  color:#B45309;
-}
-
-body.theme-dark .gantt-wrap{
-  background:#141E2C;
-  border-color:#2A3A52;
-}
-body.theme-dark .gantt-title,
-body.theme-dark .gantt-label-name{
-  color:#EAF1FB;
-}
-body.theme-dark .gantt-label-date,
-body.theme-dark .gantt-axis-track span{
-  color:#AFC3DD;
-}
-body.theme-dark .gantt-track{
-  background:#1C2740;
-}
-body.theme-dark .gantt-grid-line{
-  background:#324866;
-}
+body.theme-dark .med-item { background:#1A2536; border-color:#2A3A52; }
+body.theme-dark .med-name { color:#EAF1FB; }
+body.theme-dark .med-nhom { color:#7FB0FF; }
+body.theme-dark .med-dose { color:#C6D5E8; }
+body.theme-dark .med-period { color:#BFD0E5; }
+body.theme-dark .med-status.done { background:#E2E8F0; color:#475569; }
+body.theme-dark .med-status.active { background:#DCFCE7; color:#047857; }
+body.theme-dark .med-status.unknown { background:#FEF3C7; color:#B45309; }
+body.theme-dark .gantt-wrap { background:#141E2C; border-color:#2A3A52; }
+body.theme-dark .gantt-title, body.theme-dark .gantt-label-name { color:#EAF1FB; }
+body.theme-dark .gantt-label-date, body.theme-dark .gantt-axis-track span { color:#AFC3DD; }
+body.theme-dark .gantt-track { background:#1C2740; }
+body.theme-dark .gantt-grid-line { background:#324866; }
 
 /* 5) Kiểm tra an toàn đơn thuốc */
 
-/* QUAN TRỌNG:
-   rule cũ này quá rộng:
-   body.theme-dark .drug-egfr-box * { color:#C6D5E8 }
-   nó làm tag/pill bị nhạt.
-   Phần bên dưới sẽ override lại cho đúng. */
+/*
+QUAN TRỌNG:
+Rule cũ này quá rộng:
+body.theme-dark .drug-egfr-box * { color:#C6D5E8; }
+Nó làm tag/pill bị nhạt.
+Phần bên dưới sẽ override lại cho đúng.
+*/
 
-body.theme-dark .drug-egfr-lbl,
-body.theme-dark .drug-egfr-note,
-body.theme-dark .egfr-inputs{
-  color:#C6D5E8;
-}
-body.theme-dark .egfr-inputs b{
-  color:#FFFFFF;
-}
+body.theme-dark .drug-egfr-lbl, body.theme-dark .drug-egfr-note, body.theme-dark .egfr-inputs { color:#C6D5E8; }
+body.theme-dark .egfr-inputs b { color:#FFFFFF; }
+body.theme-dark .drug-egfr-tag.ok { background:#DCFCE7; color:#047857 !important; }
+body.theme-dark .drug-egfr-tag.warn { background:#FEF3C7; color:#B45309 !important; }
+body.theme-dark .drug-egfr-tag.crit { background:#FEE2E2; color:#B91C1C !important; }
+body.theme-dark .mf { background:#1A2536; color:#EAF1FB; }
+body.theme-dark .mf-op { color:#AFC3DD; }
 
-body.theme-dark .drug-egfr-tag.ok{
-  background:#DCFCE7;
-  color:#047857 !important;
-}
-body.theme-dark .drug-egfr-tag.warn{
-  background:#FEF3C7;
-  color:#B45309 !important;
-}
-body.theme-dark .drug-egfr-tag.crit{
-  background:#FEE2E2;
-  color:#B91C1C !important;
-}
+/* Alert card bên trong drug safety */
+body.theme-dark .drug-section-hd { color:#EAF1FB; }
+body.theme-dark .drug-alert { background:#F8FAFC !important; border-color:#CBD5E1 !important; }
+body.theme-dark .drug-pair, body.theme-dark .drug-conseq, body.theme-dark .drug-suggest { color:#0F2740; }
+body.theme-dark .drug-suggest strong { color:#0B1F2A; }
+body.theme-dark .drug-caution { background:#FFF7D6; border-color:#FCD34D; color:#7C2D12; }
+body.theme-dark .drug-caution b { color:#B45309; }
+body.theme-dark .prio-src { background:#EAF2FF; border-color:#BFDBFE; color:#1D4ED8; }
+body.theme-dark .drug-disclaimer { color:#AFC3DD; border-top-color:#2A3A52; }
 
-body.theme-dark .mf{
-  background:#1A2536;
-  color:#EAF1FB;
-}
-body.theme-dark .mf-op{
-  color:#AFC3DD;
-}
-
-/* alert card bên trong drug safety */
-body.theme-dark .drug-section-hd{
-  color:#EAF1FB;
-}
-body.theme-dark .drug-alert{
-  background:#F8FAFC !important;
-  border-color:#CBD5E1 !important;
-}
-body.theme-dark .drug-pair,
-body.theme-dark .drug-conseq,
-body.theme-dark .drug-suggest{
-  color:#0F2740;
-}
-body.theme-dark .drug-suggest strong{
-  color:#0B1F2A;
-}
-body.theme-dark .drug-caution{
-  background:#FFF7D6;
-  border-color:#FCD34D;
-  color:#7C2D12;
-}
-body.theme-dark .drug-caution b{
-  color:#B45309;
-}
-body.theme-dark .prio-src{
-  background:#EAF2FF;
-  border-color:#BFDBFE;
-  color:#1D4ED8;
-}
-body.theme-dark .drug-disclaimer{
-  color:#AFC3DD;
-  border-top-color:#2A3A52;
-}
 /* Sửa độ tương phản phần Biện luận lâm sàng */
-body.theme-dark .reason-item{
-  background:#1A2536 !important;
-  border-color:#3A4D69 !important;
-}
+body.theme-dark .reason-item { background:#1A2536 !important; border-color:#3A4D69 !important; }
+body.theme-dark .reason-item .reason-title { color:#FFFFFF !important; }
+body.theme-dark .reason-item .reason-bullets li, body.theme-dark .reason-item .reason-body { color:#DCE7F5 !important; }
+body.theme-dark .reason-item .reason-bullets, body.theme-dark .reason-item .reason-body { border-top-color:#415571 !important; }
 
-body.theme-dark .reason-item .reason-title{
-  color:#FFFFFF !important;
-}
-
-body.theme-dark .reason-item .reason-bullets li,
-body.theme-dark .reason-item .reason-body{
-  color:#DCE7F5 !important;
-}
-
-body.theme-dark .reason-item .reason-bullets,
-body.theme-dark .reason-item .reason-body{
-  border-top-color:#415571 !important;
-}
 /* Tóm tắt toàn cảnh - dark mode */
-body.theme-dark .summary-phase{
-  background:#1A2536 !important;
-  border-color:#3A4D69 !important;
-}
-
-body.theme-dark .summary-phase .bullet-list li{
-  color:#E2EBF7 !important;
-}
-
-body.theme-dark .summary-phase .bullet-list li::before{
-  background:#60A5FA;
-}
+body.theme-dark .summary-phase { background:#1A2536 !important; border-color:#3A4D69 !important; }
+body.theme-dark .summary-phase .bullet-list li { color:#E2EBF7 !important; }
+body.theme-dark .summary-phase .bullet-list li::before { background:#60A5FA; }
 
 /* Tiêu đề từng giai đoạn */
-body.theme-dark .summary-phase-title{
-  font-weight:800;
-}
+body.theme-dark .summary-phase-title { font-weight:800; }
 
 /* Giữ số thứ tự nổi rõ */
-body.theme-dark .summary-phase-num{
-  color:#FFFFFF !important;
-}
-/* =====================================
-   DARK MODE: ECHO CHART + PRIORITY BOARD
-   ===================================== */
+body.theme-dark .summary-phase-num { color:#FFFFFF !important; }
 
-/* 1. Đồ thị diễn biến EF và chênh áp */
-body.theme-dark .echo-tl-wrap{
-  background:#131D2E;
-  border-color:#2A3A52;
-  box-shadow:0 4px 18px rgba(0,0,0,0.22);
-}
+/* ========================= DARK MODE: ECHO CHART + PRIORITY BOARD ========================= */
 
-body.theme-dark .echo-tl-wrap svg{
-  background:#101A2B;
-  border:1px solid #263750;
-  border-radius:12px;
-}
-
-body.theme-dark .echo-tl-legend span{
-  color:#C7D4E6;
-}
+/* 1) Đồ thị diễn biến EF và chênh áp */
+body.theme-dark .echo-tl-wrap { background:#131D2E; border-color:#2A3A52; box-shadow:0 4px 18px rgba(0,0,0,0.22); }
+body.theme-dark .echo-tl-wrap svg { background:#101A2B; border:1px solid #263750; border-radius:12px; }
+body.theme-dark .echo-tl-legend span { color:#C7D4E6; }
 
 /* Nhãn EF đang dùng màu xanh đậm inline nên khó đọc trên nền tối */
-body.theme-dark .echo-tl-wrap svg text[fill="#1D3A6E"]{
-  fill:#DCE8F8 !important;
-}
+body.theme-dark .echo-tl-wrap svg text[fill="#1D3A6E"] { fill:#DCE8F8 !important; }
 
 /* Làm các nhãn trục xanh sáng hơn */
-body.theme-dark .echo-tl-wrap svg text[fill="#1D6FE8"]{
-  fill:#60A5FA !important;
-}
+body.theme-dark .echo-tl-wrap svg text[fill="#1D6FE8"] { fill:#60A5FA !important; }
 
 /* Nhãn ngày */
-body.theme-dark .echo-tl-wrap svg text[fill="#94A3B8"]{
-  fill:#AFC1D8 !important;
-}
+body.theme-dark .echo-tl-wrap svg text[fill="#94A3B8"] { fill:#AFC1D8 !important; }
 
 /* Khung phân tích AI dưới biểu đồ */
-body.theme-dark .echo-tl-wrap .ai-insight{
-  background:#17243A;
-  border-color:#304765;
-}
+body.theme-dark .echo-tl-wrap .ai-insight { background:#17243A; border-color:#304765; }
+body.theme-dark .echo-tl-wrap .ai-insight-text { color:#E2EBF7; }
 
-body.theme-dark .echo-tl-wrap .ai-insight-text{
-  color:#E2EBF7;
-}
-
-/* 2. Phân tầng ưu tiên lâm sàng */
-body.theme-dark .prio-board{
-  background:#2A3A52;
-}
+/* 2) Phân tầng ưu tiên lâm sàng */
+body.theme-dark .prio-board { background:#2A3A52; }
 
 /* Tiêu đề Xử lý / Theo dõi / Ổn định */
-body.theme-dark .prio-col-head{
-  background:#18243A !important;
-  border-bottom:1px solid #30435F;
-}
+body.theme-dark .prio-col-head { background:#18243A !important; border-bottom:1px solid #30435F; }
 
 /* Phần thân mỗi cột */
-body.theme-dark .prio-col-body{
-  background:#101A2B;
-}
+body.theme-dark .prio-col-body { background:#101A2B; }
 
 /* Card nội dung */
-body.theme-dark .prio-box{
-  background:#18243A;
-  border-color:#30435F;
-  box-shadow:0 2px 8px rgba(0,0,0,0.14);
-}
-
-body.theme-dark .prio-box-name{
-  color:#F8FAFC;
-}
-
-body.theme-dark .prio-box-reason{
-  color:#C7D5E8;
-}
-
-body.theme-dark .prio-box-lbl{
-  color:#EAF1FB;
-}
+body.theme-dark .prio-box { background:#18243A; border-color:#30435F; box-shadow:0 2px 8px rgba(0,0,0,0.14); }
+body.theme-dark .prio-box-name { color:#F8FAFC; }
+body.theme-dark .prio-box-reason { color:#C7D5E8; }
+body.theme-dark .prio-box-lbl { color:#EAF1FB; }
 
 /* Dòng “Không có mục nào” hiện đang quá mờ */
-body.theme-dark .prio-col-empty{
-  color:#91A6C2;
-}
+body.theme-dark .prio-col-empty { color:#91A6C2; }
 
 /* Số lượng ở đầu mỗi cột */
-body.theme-dark .prio-col-n{
-  background:#0F192A;
-  color:#F1F5F9;
-  border:1px solid #30435F;
-}
+body.theme-dark .prio-col-n { background:#0F192A; color:#F1F5F9; border:1px solid #30435F; }
 
 /* Nút nguồn hướng dẫn */
-body.theme-dark .prio-src{
-  background:#EAF2FF;
-  color:#1D4ED8;
-  border-color:#BFDBFE;
-}
+body.theme-dark .prio-src { background:#EAF2FF; color:#1D4ED8; border-color:#BFDBFE; }
+body.theme-dark .prio-src:hover { background:#1D6FE8; color:#FFFFFF; }
+/* ========================================= DARK MODE: UPLOAD + GHI ÂM + CONFIRM LOGOUT ========================================= */
 
-body.theme-dark .prio-src:hover{
-  background:#1D6FE8;
-  color:#FFFFFF;
-}
+/* 1. Khu vực kéo thả tài liệu */
+body.theme-dark .upload-zone { background:#141D2F !important; border-color:#38506F !important; box-shadow:0 10px 36px rgba(0,0,0,0.28); }
+body.theme-dark .upload-zone:hover { background:#18243A !important; border-color:#5B95F2 !important; }
+body.theme-dark .upload-zone.drag { background:#1B2B44 !important; border-color:#60A5FA !important; box-shadow:0 0 0 5px rgba(96,165,250,0.12), 0 12px 40px rgba(0,0,0,0.30); }
+body.theme-dark .upload-icon { background:linear-gradient(135deg, rgba(96,165,250,0.18), rgba(45,212,191,0.14)); border:1px solid #304765; }
+body.theme-dark .upload-title { color:#F8FAFC !important; }
+body.theme-dark .upload-sub { color:#B8C8DC !important; }
+body.theme-dark .upload-privacy, body.theme-dark .fmt-lbl { color:#9FB3CC !important; }
+
+/* Dòng trạng thái khi đang phân tích đang dùng inline color */
+body.theme-dark .upload-zone > div > p { color:#C7D4E6 !important; }
+body.theme-dark .upload-zone > div > p:first-of-type { color:#F8FAFC !important; }
+
+/* Các nhãn PDF, DOC, XLS... */
+body.theme-dark .fmt-chip { background:#1E2B44 !important; border:1px solid #38506F; color:#DCE8F8 !important; }
+
+/* Link demo và lịch sử */
+body.theme-dark .demo-link, body.theme-dark .hist-link { color:#7FB0FF; }
+body.theme-dark .demo-link { background:rgba(91,149,242,0.10); border-color:#304765; }
+body.theme-dark .demo-link:hover, body.theme-dark .hist-link:hover { background:rgba(91,149,242,0.18); }
+
+/* 2. Khung lời dặn và ghi âm */
+body.theme-dark .rec-inline-wrap { background:#111C2E !important; border-color:#30435F !important; }
+body.theme-dark .rec-inline-h { color:#F1F5F9 !important; }
+body.theme-dark .smart-note { background:#0F192A !important; border-color:#30435F !important; }
+body.theme-dark .smart-note:focus-within { border-color:#60A5FA !important; }
+body.theme-dark .smart-note.rec { border-color:#2DD4BF !important; box-shadow:0 0 0 3px rgba(45,212,191,0.10); }
+body.theme-dark .smart-note-ta { background:#0F192A !important; color:#EAF1FB !important; }
+body.theme-dark .smart-note-ta::placeholder { color:#8398B5 !important; opacity:1; }
+body.theme-dark .smart-note-bar { background:#152136 !important; border-top-color:#30435F !important; }
+body.theme-dark .sn-mic { background:#1B2A42 !important; border-color:#3A5272 !important; color:#DCE8F8 !important; }
+body.theme-dark .sn-mic:hover { background:#203452 !important; border-color:#2DD4BF !important; color:#5EEAD4 !important; }
+body.theme-dark .sn-mic.on { background:#123630 !important; border-color:#2DD4BF !important; color:#5EEAD4 !important; }
+body.theme-dark .sn-count { color:#AFC1D8 !important; }
+
+/* Nút đính kèm bị vô hiệu hóa */
+body.theme-dark .sn-send:disabled { background:#34445D; color:#9FB1C8; opacity:1; }
+
+/* 3. Hộp xác nhận đăng xuất */
+body.theme-dark .cfm { background:#161F33 !important; border:1px solid #30435F; box-shadow:0 24px 60px rgba(0,0,0,0.48); }
+body.theme-dark .cfm-t { color:#F8FAFC !important; }
+body.theme-dark .cfm-m { color:#BFD0E5 !important; }
+
+/* Nút Hủy */
+body.theme-dark .cfm-cancel { background:#1E2B44 !important; border-color:#3A5272 !important; color:#E2EBF7 !important; }
+body.theme-dark .cfm-cancel:hover { background:#293A57 !important; border-color:#5B78A0 !important; color:#FFFFFF !important; }
+
+/* Nút Đăng xuất */
+body.theme-dark .cfm-ok.danger { background:#DC2626; color:#FFFFFF; }
+body.theme-dark .cfm-ok.danger:hover { background:#B91C1C; }
+
 
 /* ===== TONG QUAN NHANH (CaseOverview) ===== */
 .co-wrap{max-width:1100px;margin:0 auto 20px;background:#fff;border:1px solid var(--border);border-radius:16px;padding:16px 18px;box-shadow:var(--shadow-sm)}
