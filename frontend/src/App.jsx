@@ -2455,6 +2455,7 @@ const NAV_GROUPS = [
     {id:"sec-trend",    label:"Xu hướng tổng hợp",   icon:<Icon.Pulse d={11}/>},
     {id:"sec-meds",      label:"Thuốc",          icon:<Icon.Pill d={11}/>},
     {id:"sec-drug",      label:"eGFR & An toàn thuốc", icon:<Icon.ShieldCheck d={11}/>},
+    {id:"sec-risk",      label:"Thang điểm nguy cơ",   icon:<Icon.Shield d={11}/>},
     {id:"sec-summary",   label:"Tóm tắt",        icon:<Icon.FileText d={11}/>},
   ]},
 ]
@@ -3520,6 +3521,94 @@ function DrugSafetyCard({ safety, egfr, egfrDetail, onSource }) {
   )
 }
 
+// Hàng riêng cho 1 mục trong bảng điểm: hiện rõ "có/không/không xác định"
+function RiskScoreRow({ item }) {
+  return (
+    <div className={`risk-row${item.co ? " on" : ""}`}>
+      <span className="risk-row-chip" style={item.co ? { background: "#FEF2F2", color: "#DC2626", borderColor: "#FECACA" } : { background: "#F1F5F9", color: "#64748B", borderColor: "#E2E8F0" }}>
+        {item.co ? `+${item.diem_neu_co}` : "+0"}
+      </span>
+      <div className="risk-row-body">
+        <div className="risk-row-name">{item.ten}</div>
+        <div className="risk-row-note">{item.ghi_chu}</div>
+      </div>
+    </div>
+  )
+}
+
+function RiskScoreGauge({ value, max, label, color }) {
+  const pct = Math.min(100, Math.round((value / max) * 100))
+  return (
+    <div className="risk-gauge">
+      <div className="risk-gauge-top">
+        <span className="risk-gauge-lbl">{label}</span>
+        <span className="risk-gauge-val" style={{ color }}><CountUp value={value}/>/{max}</span>
+      </div>
+      <div className="risk-gauge-track">
+        <div className="risk-gauge-fill" style={{ width: `${pct}%`, background: color }}/>
+      </div>
+    </div>
+  )
+}
+
+// Thang điểm CHA2DS2-VASc + HAS-BLED. Chỉ hiển thị khi backend (rule engine
+// tất định) đã trả risk_scores qua analysis — không tự tính lại ở client để
+// tránh có 2 nguồn kết quả khác nhau cho cùng một bệnh nhân.
+function RiskScoresCard({ riskScores, onSource }) {
+  if (!riskScores) return null
+  const cv = riskScores.cha2ds2_vasc
+  const hb = riskScores.has_bled
+  if (!cv && !hb) return null
+
+  return (
+    <Card id="sec-risk" title="Thang điểm nguy cơ (chống đông)" icon={<Icon.Shield d={16}/>}>
+      <div className="risk-disclaimer-top">
+        Hỗ trợ quyết định, không tự kê đơn hoặc chỉnh liều chống đông. Mọi điểm số cần bác sĩ xác nhận trước khi áp dụng.
+      </div>
+
+      {cv && (
+        <div className="risk-block">
+          <div className="risk-block-hd">
+            <span>{cv.ten_thang_diem}</span>
+            <span className="risk-block-sub">Nguy cơ đột quỵ / huyết khối ở rung nhĩ</span>
+          </div>
+          <RiskScoreGauge value={cv.tong_diem} max={cv.thang_diem_toi_da} label="Tổng điểm" color={cv.tong_diem>=2?"#DC2626":cv.tong_diem===1?"#D97706":"#059669"}/>
+          {cv.mechanical_valve && (
+            <div className="risk-context-alert">
+              <Icon.Alert d={14} color="#DC2626"/>
+              <span>{cv.canh_bao_boi_canh}</span>
+            </div>
+          )}
+          {!cv.mechanical_valve && (
+            <div className="risk-context-note">{cv.canh_bao_boi_canh}</div>
+          )}
+          <div className="risk-rows">
+            {cv.chi_tiet.map((it,i) => <RiskScoreRow key={i} item={it}/>)}
+          </div>
+          <button className="prio-src" onClick={()=>onSource(`${cv.ten_thang_diem}: tổng ${cv.tong_diem}/${cv.thang_diem_toi_da} điểm — Nguồn: ${cv.nguon_guideline}`)}>{cv.nguon_guideline}</button>
+        </div>
+      )}
+
+      {hb && (
+        <div className="risk-block">
+          <div className="risk-block-hd">
+            <span>{hb.ten_thang_diem}</span>
+            <span className="risk-block-sub">Nguy cơ chảy máu khi dùng chống đông</span>
+          </div>
+          <RiskScoreGauge value={hb.tong_diem} max={hb.thang_diem_toi_da} label="Tổng điểm" color={hb.muc_nguy_co==="cao"?"#DC2626":"#059669"}/>
+          <div className="risk-context-note">{hb.dien_giai_muc_nguy_co}</div>
+          <div className="risk-rows">
+            {hb.chi_tiet.map((it,i) => <RiskScoreRow key={i} item={it}/>)}
+          </div>
+          <button className="prio-src" onClick={()=>onSource(`${hb.ten_thang_diem}: tổng ${hb.tong_diem}/${hb.thang_diem_toi_da} điểm — Nguồn: ${hb.nguon_guideline}`)}>{hb.nguon_guideline}</button>
+        </div>
+      )}
+
+      <div className="drug-disclaimer">Biến đầu vào dò từ chẩn đoán/tiền sử trong hồ sơ; mục ghi "không xác định" nghĩa là hồ sơ không nêu rõ, KHÔNG phải bệnh nhân chắc chắn không có.</div>
+    </Card>
+  )
+}
+
 // ─── HERO STATUS (dải trạng thái tổng quan để bác sĩ hiểu trong 15 giây) ───────────────
 function HeroStatus({ info, findings, trajectory }) {
   const tm = TRAJECTORY_META[trajectory.verdict] || TRAJECTORY_META.on_dinh
@@ -3883,12 +3972,14 @@ function ReportTab({ report: r, analysis }) {
 
   // Nguồn chân lý: rule engine backend (Bước 2) nếu có; nếu không (demo) thì tính client-side.
   let findings, egfr, safety, egfrDetail
+  let riskScores = null
   if (analysis) {
     findings = analysis.priority_findings || []
     egfr = analysis.egfr
     egfrDetail = analysis.egfr_detail || null
     const ds = analysis.drug_safety || {}
     safety = { interactions: ds.interactions || [], renalFlags: ds.renal_flags || [], favorable: ds.favorable || [] }
+    riskScores = analysis.risk_scores || null
   } else {
     const s = runPriorityScreens(r)
     findings = s.findings; egfr = s.egfr
@@ -4051,6 +4142,9 @@ function ReportTab({ report: r, analysis }) {
 
       {/* PHÂN TÍCH: eGFR + an toàn đơn thuốc */}
       <DrugSafetyCard safety={safety} egfr={egfr} egfrDetail={egfrDetail} onSource={setModalSource}/>
+
+      {/* PHÂN TÍCH: Thang điểm nguy cơ chống đông (chỉ hiện khi backend trả risk_scores) */}
+      <RiskScoresCard riskScores={riskScores} onSource={setModalSource}/>
 
       {/* Tóm tắt toàn cảnh */}
       <SummaryCard text={r.tom_tat_toan_canh}/>
@@ -5382,205 +5476,6 @@ body.theme-dark .ul-pair li{background:#141E2C;border-color:#2A3A52}
 body.theme-dark .ul-pair li b{color:#E2EBF7}
 body.theme-dark .ul-pair li span{color:#9FB3CC}
 body.theme-dark .teach-chip{background:#1A2536;color:#C6D5E8;border-color:#2A3A52}
-/* ===== DARK v4.5: Update contrast color ===== */
-/* Thêm Darkmode */
-body.theme-dark .phase-chip:not(.lead) { background:#1B2A42; color:#E2EAF5; border-color:#38506F; }
-
-/* ========================= DARK MODE CONTRAST FIXES ========================= */
-
-/* 1) Chẩn đoán hình ảnh qua 3 giai đoạn */
-body.theme-dark .echo-tl-modes { background:#1C2740; border-color:#2F4368; }
-body.theme-dark .echo-tl-modes button { color:#C7D4E6; }
-body.theme-dark .echo-tl-modes button.on { background:#F8FBFF; color:#1D6FE8; }
-body.theme-dark .ai-insight { background:#1A2536; border-color:#324866; }
-body.theme-dark .ai-insight-text { color:#E6EEF9; }
-body.theme-dark .ai-insight-tag, body.theme-dark .ai-insight-text strong { color:#7FB0FF; }
-
-/* 2) Chi tiết 9 lượt siêu âm */
-body.theme-dark .echo-seg { background:#1C2740; border-color:#2F4368; }
-body.theme-dark .echo-seg button { color:#C7D4E6; }
-body.theme-dark .echo-seg button.on { background:#F8FBFF; color:#1D6FE8; }
-body.theme-dark .echo-tbl-scroll { border-color:#2A3A52; }
-body.theme-dark .echo-tbl th { background:#1A2536; color:#EAF1FB; border-bottom-color:#2A3A52; }
-body.theme-dark .echo-tbl td { color:#D6E2F2; border-bottom-color:#24344B; }
-body.theme-dark .echo-tbl tr.latest { background:#1C2B42; }
-body.theme-dark .echo-tbl tr.warn { background:#3A2024; }
-body.theme-dark .echo-phase-pill { font-weight:700; }
-
-/* Ô ghi chú trong bảng siêu âm */
-.echo-note-cell { font-size:11px; color:#5A7BB8; }
-body.theme-dark .echo-note-cell { color:#CFE0F5; }
-body.theme-dark .echo-note-cell.warn { color:#FFD1D1; }
-body.theme-dark .echo-note-bullets li { color:inherit; }
-
-/* 3) Diễn biến lâm sàng theo giai đoạn */
-body.theme-dark .reason-title, body.theme-dark .reason-body, body.theme-dark .reason-bullets li { color:#EAF1FB; }
-body.theme-dark .reason-bullets, body.theme-dark .reason-body { border-top-color:#324866; }
-
-/* Badge giai đoạn trong phần reasoning */
-body.theme-dark .reason-phase { background:rgba(255,255,255,0.08) !important; border-color:currentColor !important; font-weight:800; }
-
-/* Chip trong timeline phase */
-body.theme-dark .phase-chip:not(.lead) { background:#1B2A42; color:#E2EAF5; border-color:#38506F; }
-body.theme-dark .phase-chip.lead { background:#2A3750; color:#FFFFFF; border-color:#4A6790; }
-
-/* 4) Đơn thuốc và lịch dùng */
-body.theme-dark .med-item { background:#1A2536; border-color:#2A3A52; }
-body.theme-dark .med-name { color:#EAF1FB; }
-body.theme-dark .med-nhom { color:#7FB0FF; }
-body.theme-dark .med-dose { color:#C6D5E8; }
-body.theme-dark .med-period { color:#BFD0E5; }
-body.theme-dark .med-status.done { background:#E2E8F0; color:#475569; }
-body.theme-dark .med-status.active { background:#DCFCE7; color:#047857; }
-body.theme-dark .med-status.unknown { background:#FEF3C7; color:#B45309; }
-body.theme-dark .gantt-wrap { background:#141E2C; border-color:#2A3A52; }
-body.theme-dark .gantt-title, body.theme-dark .gantt-label-name { color:#EAF1FB; }
-body.theme-dark .gantt-label-date, body.theme-dark .gantt-axis-track span { color:#AFC3DD; }
-body.theme-dark .gantt-track { background:#1C2740; }
-body.theme-dark .gantt-grid-line { background:#324866; }
-
-/* 5) Kiểm tra an toàn đơn thuốc */
-
-/*
-QUAN TRỌNG:
-Rule cũ này quá rộng:
-body.theme-dark .drug-egfr-box * { color:#C6D5E8; }
-Nó làm tag/pill bị nhạt.
-Phần bên dưới sẽ override lại cho đúng.
-*/
-
-body.theme-dark .drug-egfr-lbl, body.theme-dark .drug-egfr-note, body.theme-dark .egfr-inputs { color:#C6D5E8; }
-body.theme-dark .egfr-inputs b { color:#FFFFFF; }
-body.theme-dark .drug-egfr-tag.ok { background:#DCFCE7; color:#047857 !important; }
-body.theme-dark .drug-egfr-tag.warn { background:#FEF3C7; color:#B45309 !important; }
-body.theme-dark .drug-egfr-tag.crit { background:#FEE2E2; color:#B91C1C !important; }
-body.theme-dark .mf { background:#1A2536; color:#EAF1FB; }
-body.theme-dark .mf-op { color:#AFC3DD; }
-
-/* Alert card bên trong drug safety */
-body.theme-dark .drug-section-hd { color:#EAF1FB; }
-body.theme-dark .drug-alert { background:#F8FAFC !important; border-color:#CBD5E1 !important; }
-body.theme-dark .drug-pair, body.theme-dark .drug-conseq, body.theme-dark .drug-suggest { color:#0F2740; }
-body.theme-dark .drug-suggest strong { color:#0B1F2A; }
-body.theme-dark .drug-caution { background:#FFF7D6; border-color:#FCD34D; color:#7C2D12; }
-body.theme-dark .drug-caution b { color:#B45309; }
-body.theme-dark .prio-src { background:#EAF2FF; border-color:#BFDBFE; color:#1D4ED8; }
-body.theme-dark .drug-disclaimer { color:#AFC3DD; border-top-color:#2A3A52; }
-
-/* Sửa độ tương phản phần Biện luận lâm sàng */
-body.theme-dark .reason-item { background:#1A2536 !important; border-color:#3A4D69 !important; }
-body.theme-dark .reason-item .reason-title { color:#FFFFFF !important; }
-body.theme-dark .reason-item .reason-bullets li, body.theme-dark .reason-item .reason-body { color:#DCE7F5 !important; }
-body.theme-dark .reason-item .reason-bullets, body.theme-dark .reason-item .reason-body { border-top-color:#415571 !important; }
-
-/* Tóm tắt toàn cảnh - dark mode */
-body.theme-dark .summary-phase { background:#1A2536 !important; border-color:#3A4D69 !important; }
-body.theme-dark .summary-phase .bullet-list li { color:#E2EBF7 !important; }
-body.theme-dark .summary-phase .bullet-list li::before { background:#60A5FA; }
-
-/* Tiêu đề từng giai đoạn */
-body.theme-dark .summary-phase-title { font-weight:800; }
-
-/* Giữ số thứ tự nổi rõ */
-body.theme-dark .summary-phase-num { color:#FFFFFF !important; }
-
-/* ========================= DARK MODE: ECHO CHART + PRIORITY BOARD ========================= */
-
-/* 1) Đồ thị diễn biến EF và chênh áp */
-body.theme-dark .echo-tl-wrap { background:#131D2E; border-color:#2A3A52; box-shadow:0 4px 18px rgba(0,0,0,0.22); }
-body.theme-dark .echo-tl-wrap svg { background:#101A2B; border:1px solid #263750; border-radius:12px; }
-body.theme-dark .echo-tl-legend span { color:#C7D4E6; }
-
-/* Nhãn EF đang dùng màu xanh đậm inline nên khó đọc trên nền tối */
-body.theme-dark .echo-tl-wrap svg text[fill="#1D3A6E"] { fill:#DCE8F8 !important; }
-
-/* Làm các nhãn trục xanh sáng hơn */
-body.theme-dark .echo-tl-wrap svg text[fill="#1D6FE8"] { fill:#60A5FA !important; }
-
-/* Nhãn ngày */
-body.theme-dark .echo-tl-wrap svg text[fill="#94A3B8"] { fill:#AFC1D8 !important; }
-
-/* Khung phân tích AI dưới biểu đồ */
-body.theme-dark .echo-tl-wrap .ai-insight { background:#17243A; border-color:#304765; }
-body.theme-dark .echo-tl-wrap .ai-insight-text { color:#E2EBF7; }
-
-/* 2) Phân tầng ưu tiên lâm sàng */
-body.theme-dark .prio-board { background:#2A3A52; }
-
-/* Tiêu đề Xử lý / Theo dõi / Ổn định */
-body.theme-dark .prio-col-head { background:#18243A !important; border-bottom:1px solid #30435F; }
-
-/* Phần thân mỗi cột */
-body.theme-dark .prio-col-body { background:#101A2B; }
-
-/* Card nội dung */
-body.theme-dark .prio-box { background:#18243A; border-color:#30435F; box-shadow:0 2px 8px rgba(0,0,0,0.14); }
-body.theme-dark .prio-box-name { color:#F8FAFC; }
-body.theme-dark .prio-box-reason { color:#C7D5E8; }
-body.theme-dark .prio-box-lbl { color:#EAF1FB; }
-
-/* Dòng “Không có mục nào” hiện đang quá mờ */
-body.theme-dark .prio-col-empty { color:#91A6C2; }
-
-/* Số lượng ở đầu mỗi cột */
-body.theme-dark .prio-col-n { background:#0F192A; color:#F1F5F9; border:1px solid #30435F; }
-
-/* Nút nguồn hướng dẫn */
-body.theme-dark .prio-src { background:#EAF2FF; color:#1D4ED8; border-color:#BFDBFE; }
-body.theme-dark .prio-src:hover { background:#1D6FE8; color:#FFFFFF; }
-
-/* ========================================= DARK MODE: UPLOAD + GHI ÂM + CONFIRM LOGOUT ========================================= */
-
-/* 1. Khu vực kéo thả tài liệu */
-body.theme-dark .upload-zone { background:#141D2F !important; border-color:#38506F !important; box-shadow:0 10px 36px rgba(0,0,0,0.28); }
-body.theme-dark .upload-zone:hover { background:#18243A !important; border-color:#5B95F2 !important; }
-body.theme-dark .upload-zone.drag { background:#1B2B44 !important; border-color:#60A5FA !important; box-shadow:0 0 0 5px rgba(96,165,250,0.12), 0 12px 40px rgba(0,0,0,0.30); }
-body.theme-dark .upload-icon { background:linear-gradient(135deg, rgba(96,165,250,0.18), rgba(45,212,191,0.14)); border:1px solid #304765; }
-body.theme-dark .upload-title { color:#F8FAFC !important; }
-body.theme-dark .upload-sub { color:#B8C8DC !important; }
-body.theme-dark .upload-privacy, body.theme-dark .fmt-lbl { color:#9FB3CC !important; }
-
-/* Dòng trạng thái khi đang phân tích đang dùng inline color */
-body.theme-dark .upload-zone > div > p { color:#C7D4E6 !important; }
-body.theme-dark .upload-zone > div > p:first-of-type { color:#F8FAFC !important; }
-
-/* Các nhãn PDF, DOC, XLS... */
-body.theme-dark .fmt-chip { background:#1E2B44 !important; border:1px solid #38506F; color:#DCE8F8 !important; }
-
-/* Link demo và lịch sử */
-body.theme-dark .demo-link, body.theme-dark .hist-link { color:#7FB0FF; }
-body.theme-dark .demo-link { background:rgba(91,149,242,0.10); border-color:#304765; }
-body.theme-dark .demo-link:hover, body.theme-dark .hist-link:hover { background:rgba(91,149,242,0.18); }
-
-/* 2. Khung lời dặn và ghi âm */
-body.theme-dark .rec-inline-wrap { background:#111C2E !important; border-color:#30435F !important; }
-body.theme-dark .rec-inline-h { color:#F1F5F9 !important; }
-body.theme-dark .smart-note { background:#0F192A !important; border-color:#30435F !important; }
-body.theme-dark .smart-note:focus-within { border-color:#60A5FA !important; }
-body.theme-dark .smart-note.rec { border-color:#2DD4BF !important; box-shadow:0 0 0 3px rgba(45,212,191,0.10); }
-body.theme-dark .smart-note-ta { background:#0F192A !important; color:#EAF1FB !important; }
-body.theme-dark .smart-note-ta::placeholder { color:#8398B5 !important; opacity:1; }
-body.theme-dark .smart-note-bar { background:#152136 !important; border-top-color:#30435F !important; }
-body.theme-dark .sn-mic { background:#1B2A42 !important; border-color:#3A5272 !important; color:#DCE8F8 !important; }
-body.theme-dark .sn-mic:hover { background:#203452 !important; border-color:#2DD4BF !important; color:#5EEAD4 !important; }
-body.theme-dark .sn-mic.on { background:#123630 !important; border-color:#2DD4BF !important; color:#5EEAD4 !important; }
-body.theme-dark .sn-count { color:#AFC1D8 !important; }
-
-/* Nút đính kèm bị vô hiệu hóa */
-body.theme-dark .sn-send:disabled { background:#34445D; color:#9FB1C8; opacity:1; }
-
-/* 3. Hộp xác nhận đăng xuất */
-body.theme-dark .cfm { background:#161F33 !important; border:1px solid #30435F; box-shadow:0 24px 60px rgba(0,0,0,0.48); }
-body.theme-dark .cfm-t { color:#F8FAFC !important; }
-body.theme-dark .cfm-m { color:#BFD0E5 !important; }
-
-/* Nút Hủy */
-body.theme-dark .cfm-cancel { background:#1E2B44 !important; border-color:#3A5272 !important; color:#E2EBF7 !important; }
-body.theme-dark .cfm-cancel:hover { background:#293A57 !important; border-color:#5B78A0 !important; color:#FFFFFF !important; }
-
-/* Nút Đăng xuất */
-body.theme-dark .cfm-ok.danger { background:#DC2626; color:#FFFFFF; }
-body.theme-dark .cfm-ok.danger:hover { background:#B91C1C; }
 /* ===== TONG QUAN NHANH (CaseOverview) ===== */
 .co-wrap{max-width:1100px;margin:0 auto 20px;background:#fff;border:1px solid var(--border);border-radius:16px;padding:16px 18px;box-shadow:var(--shadow-sm)}
 .co-head{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
@@ -6073,6 +5968,38 @@ body.theme-dark ::selection{background:rgba(91,149,242,.32)}
 .rpt-search-x{border:none;background:none;cursor:pointer;display:flex;padding:0}
 .search-hit{background:#fff3bf!important;border-radius:5px;box-shadow:0 0 0 3px #ffe066;transition:background .3s,box-shadow .3s}
 @media(max-width:760px){.rpt-search{margin-left:0}.rpt-search input{width:120px}}
+
+/* ── Thang điểm nguy cơ (CHA2DS2-VASc / HAS-BLED) ───────────────────────── */
+.risk-disclaimer-top{font-size:12.5px;color:#64748B;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;padding:9px 12px;margin-bottom:14px;line-height:1.5}
+.risk-block{border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:14px;background:var(--glass)}
+.risk-block-hd{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:14.5px;font-weight:700;color:#0F2740;margin-bottom:10px}
+.risk-block-sub{font-size:12px;font-weight:500;color:#64748B}
+.risk-gauge{margin-bottom:10px}
+.risk-gauge-top{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px}
+.risk-gauge-lbl{color:#5A748F;font-weight:600}
+.risk-gauge-val{font-weight:700;font-size:13.5px}
+.risk-gauge-track{height:7px;border-radius:5px;background:#EEF2F7;overflow:hidden}
+.risk-gauge-fill{height:100%;border-radius:5px;transition:width .4s ease}
+.risk-context-alert{display:flex;gap:8px;align-items:flex-start;background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;padding:9px 12px;font-size:12.5px;color:#7F1D1D;line-height:1.55;margin-bottom:10px}
+.risk-context-note{font-size:12.5px;color:#64748B;line-height:1.55;margin-bottom:10px}
+.risk-rows{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
+.risk-row{display:flex;gap:10px;align-items:flex-start;padding:7px 9px;border-radius:9px;background:#FAFCFE}
+.risk-row.on{background:#FFF7F7}
+.risk-row-chip{flex-shrink:0;font-size:11px;font-weight:700;border:1px solid;border-radius:7px;padding:2px 7px;min-width:28px;text-align:center}
+.risk-row-body{flex:1;min-width:0}
+.risk-row-name{font-size:12.5px;font-weight:600;color:#1E293B}
+.risk-row-note{font-size:11.5px;color:#7689A8;margin-top:1px}
+body.theme-dark .risk-disclaimer-top{background:#141E2C;border-color:#2A3A52;color:#9FB3CC}
+body.theme-dark .risk-block{background:#101A2A;border-color:#2A3A52}
+body.theme-dark .risk-block-hd{color:#EAF1FB}
+body.theme-dark .risk-block-sub{color:#7689A8}
+body.theme-dark .risk-gauge-track{background:#1A2536}
+body.theme-dark .risk-context-alert{background:#3a1414;border-color:#5c2222;color:#fca5a5}
+body.theme-dark .risk-context-note{color:#9FB3CC}
+body.theme-dark .risk-row{background:#141E2C}
+body.theme-dark .risk-row.on{background:#2a1616}
+body.theme-dark .risk-row-name{color:#D6E2F2}
+body.theme-dark .risk-row-note{color:#7689A8}
 `
 
 // ─── Toast + Confirm + Copy (UX dùng chung) ──────────────────────────────────
