@@ -1,135 +1,140 @@
 # MedParcours AI
 
-**Trợ lý lâm sàng đa chế độ cho bác sĩ và sinh viên y khoa.**
+Trợ lý AI phân tích hồ sơ bệnh án cho bác sĩ Việt Nam — đọc PDF/Word/Excel/
+PowerPoint xuất từ HIS, tự động tổng hợp diễn biến lâm sàng, phát hiện cảnh báo
+nguy cơ, tính thang điểm CHA2DS2-VASc/HAS-BLED, theo dõi TTR chống đông, và
+trợ lý hỏi-đáp MedAmi theo từng hồ sơ cụ thể.
 
-Đọc hồ sơ nhanh hơn, quyết định lâm sàng tự tin hơn. MedParcours AI đọc hồ sơ xuất từ HIS, tự động tóm tắt, cảnh báo nguy cơ và hỗ trợ hội chẩn cùng giảng dạy lâm sàng.
+**HackAIthon 2026 — Bảng B Challenger, Đề tài 5: Y tế — Team UN1SVENGERS**
 
----
-
-## 1. Bối cảnh cuộc thi
-
-| Hạng mục | Thông tin |
-|---|---|
-| Cuộc thi | Vietnamese Student HackAIthon 2026 |
-| Bảng | Bảng B Challenger |
-| Đề tài | Đề tài 5: Y tế |
-| Đội thi | Team UN1SVENGERS |
-| Đơn vị tổ chức | Hội Sinh viên Việt Nam, Vietcombank |
-| Bảo trợ chuyên môn | VNPT AI |
-| Đơn vị thực hiện | VSDS |
+> Mọi cảnh báo/điểm số là **hỗ trợ quyết định**, không tự chẩn đoán hoặc kê
+> đơn. Luôn cần bác sĩ xác nhận trước khi áp dụng vào điều trị thật.
 
 ---
 
-## 2. Vấn đề
+## Cài đặt 1 lệnh (Docker)
 
-Một hồ sơ bệnh án xuất từ HIS có thể dài hàng trăm trang, dữ liệu nằm rải rác qua nhiều lần khám, nhiều khoa, nhiều phiếu xét nghiệm và chẩn đoán hình ảnh. Bác sĩ phải tốn rất nhiều thời gian để:
+**Yêu cầu:** Docker + Docker Compose đã cài sẵn.
 
-- Đọc và ghép nối diễn biến của người bệnh theo thời gian.
-- Phát hiện các tín hiệu nguy cơ dễ bị bỏ sót (tương tác thuốc, chỉ số bất thường, biến chứng sau mổ).
-- Tổng hợp thông tin để hội chẩn hoặc giảng dạy.
+```bash
+# 1. Tạo file .env từ mẫu, điền ANTHROPIC_API_KEY thật
+cp .env.example .env
+# (Mở .env, sửa ANTHROPIC_API_KEY=sk-ant-...)
 
-Áp lực thời gian và khối lượng dữ liệu lớn làm tăng nguy cơ bỏ lỡ thông tin quan trọng.
+# 2. Chạy
+docker-compose up --build
+```
 
----
+Sau khi build xong (lần đầu mất vài phút để cài dependency):
+- **Frontend:** http://localhost:8080
+- **Backend API:** http://localhost:8000 (xem `/docs` cho danh sách endpoint)
 
-## 3. Giải pháp
+Đăng nhập demo: `hackaithon2026` / `medparcours`
 
-MedParcours AI biến một hồ sơ thô thành một báo cáo có cấu trúc, trực quan và có thể hỏi đáp, chỉ trong khoảng 30 giây.
+Dừng: `docker-compose down`
 
-Điểm khác biệt cốt lõi nằm ở **quy trình lai (hybrid) ba bước**, kết hợp sức mạnh ngôn ngữ của AI với độ tin cậy của một bộ luật tất định:
+### Kiến trúc Docker (chỉ gồm backend + frontend)
 
-1. **Trích xuất (AI đọc hồ sơ).** Mô hình ngôn ngữ đọc toàn bộ hồ sơ và bóc tách thông tin thành dữ liệu có cấu trúc (thông tin hành chính, chẩn đoán, diễn biến, xét nghiệm, siêu âm, thuốc).
-2. **Đánh giá an toàn (bộ luật lâm sàng tất định).** Một rule engine viết bằng Python đảm nhận các phép đánh giá quan trọng về an toàn (phân tầng nguy cơ, kiểm tra ngưỡng chỉ số, an toàn thuốc). Bước này không phụ thuộc vào suy đoán của AI nên cho kết quả nhất quán và kiểm chứng được.
-3. **Diễn giải (AI trình bày).** AI chuyển kết quả thành bản tóm tắt, biện luận và cảnh báo dễ đọc cho con người.
+```
+docker-compose.yml
+  ├─ backend   (Dockerfile.backend)  — FastAPI + rule engine, cổng 8000
+  └─ frontend  (Dockerfile.frontend) — App.jsx build bằng esbuild, nginx, cổng 8080
+```
 
-Cách tiếp cận này giúp tận dụng khả năng đọc hiểu của AI mà vẫn giữ được tính an toàn và minh bạch cho các quyết định lâm sàng.
-
----
-
-## 4. Ba chế độ sử dụng
-
-Cùng một hồ sơ, người dùng chuyển đổi linh hoạt giữa ba góc nhìn:
-
-### Bác sĩ (Lâm sàng)
-Bảng tổng quan lâm sàng theo 3 giai đoạn (Tiền phẫu, Hậu phẫu, Ngoại trú): kết luận nhanh, trạng thái vấn đề, hành động ưu tiên, biểu đồ siêu âm tim, bảng xét nghiệm, theo dõi thuốc và an toàn thuốc.
-
-### Hội chẩn AI (Virtual MDT)
-Mô phỏng một buổi hội chẩn đa chuyên khoa: tự động chọn các chuyên khoa liên quan kèm lý do mời, từng khoa đưa ra kết luận và đề xuất riêng, có độ tin cậy và dữ liệu còn thiếu, sau đó tổng hợp thành đồng thuận cuối cùng. Có thư ký ảo MedAmi để hỏi đáp về biên bản hội chẩn.
-
-### Học vụ (Giảng dạy)
-Trình bày ca bệnh theo khung bệnh án ngoại khoa của Đại học Y Hà Nội (HMU): hành chính, bệnh sử, tiền sử, khám, tóm tắt, chẩn đoán sơ bộ và phân biệt, biện luận, cận lâm sàng, điều trị, tiên lượng, dự phòng. Có chế độ tự luyện (Guided) và thử thách (Challenge), câu hỏi vấn đáp kiểu Socratic và các điểm cảnh báo (red flags).
+Không có service `db` — bản demo này dùng kiến trúc "Pilot/Demo" (xem
+`medparcours_roadmap_v2.md` mục 3.4), không lưu trữ lịch sử lâu dài. Giai đoạn
+thương mại hóa thật (on-premise, có Postgres) sẽ thêm sau, ngoài phạm vi demo
+Vòng 2 này.
 
 ---
 
-## 5. Tính năng nổi bật
+## Chạy không cần Docker (dev nhanh)
 
-- Phân tích và tóm tắt diễn biến lâm sàng tự động theo 3 giai đoạn.
-- Phát hiện và cảnh báo sớm nguy cơ dựa trên hồ sơ, có bộ lọc theo mức độ (Khẩn, Cảnh báo, Ổn định).
-- Biểu đồ trực quan: tiến triển EF và chênh áp van qua các lần siêu âm, dấu hiệu sinh tồn, bảng xét nghiệm có xu hướng.
-- So sánh hai lần tái khám cạnh nhau, thể hiện chỉ số tăng hay giảm theo ý nghĩa lâm sàng.
-- Trợ lý ảo MedAmi: chatbot hỏi đáp chuyên sâu riêng cho từng hồ sơ, gợi ý câu hỏi thay đổi theo chế độ đang xem.
-- Lời dặn của bác sĩ: nhập trực tiếp hoặc đọc bằng giọng nói (tiếng Việt) để đính kèm cùng hồ sơ.
-- Xuất báo cáo và in theo từng chế độ: bản lâm sàng, biên bản hội chẩn, tài liệu giảng dạy.
-- Lịch sử bệnh án, tìm nhanh trong báo cáo, sao chép nhanh các kết luận.
-- Giao diện sáng và tối, điều hướng theo mục, tối ưu cho trải nghiệm bác sĩ.
+**Backend:**
+```bash
+pip install -r requirements.txt
+export ANTHROPIC_API_KEY=sk-ant-...
+uvicorn main:app --reload --port 8000
+```
 
----
-
-## 6. Quy trình sử dụng
-
-1. Đăng nhập vào hệ thống.
-2. Tải lên hồ sơ xuất từ HIS (PDF, ảnh, Word, Excel, PowerPoint). Có thể kèm lời dặn của bác sĩ.
-3. Hệ thống phân tích và tạo báo cáo có cấu trúc trong khoảng 30 giây.
-4. Bác sĩ xem báo cáo, chuyển đổi giữa ba chế độ, đặt câu hỏi cho MedAmi và xuất báo cáo khi cần.
+**Frontend:** mở `App.jsx` qua môi trường React có sẵn (claude.ai artifact,
+hoặc tự dựng entry point như `docker_setup/mount.jsx`), hoặc dùng trực tiếp
+bản đã deploy GitHub Pages.
 
 ---
 
-## 7. Công nghệ
+## Script test tự động (pytest)
 
-- **Giao diện (Frontend):** React, triển khai dạng web tĩnh.
-- **Xử lý (Backend):** dịch vụ phân tích bằng Python (FastAPI).
-- **Trí tuệ nhân tạo:** mô hình ngôn ngữ lớn cho bước đọc hiểu và diễn giải, kết hợp bộ luật lâm sàng tất định cho các đánh giá an toàn.
-- **Xử lý tài liệu:** trích xuất văn bản từ PDF ngay trên trình duyệt để hồ sơ lớn vẫn xử lý mượt.
+```bash
+pip install -r requirements-dev.txt
+pytest test_main.py -v
+```
 
----
-
-## 8. Trải nghiệm bản demo
-
-- **Tài khoản dùng thử:** `hackaithon2026`
-- **Mật khẩu:** `medparcours`
-
-Có sẵn hai hồ sơ minh họa đã ẩn danh để ban giám khảo trải nghiệm đầy đủ tính năng:
-
-- **Nguyễn Văn A:** sau phẫu thuật thay van động mạch chủ cơ học On-X, theo dõi ngoại trú.
-- **Nguyễn Văn B:** sửa van hai lá và van ba lá, diễn tiến hậu phẫu phức tạp, có chuỗi siêu âm tim theo thời gian.
-
-Mọi dữ liệu bệnh nhân trong bản demo đều đã được ẩn danh.
+16 test, mock Anthropic API (không tốn token thật, không cần mạng):
+- `/health`, `/analyze_text`, `/analyze` (PDF/Word/Excel/PowerPoint), `/chat`,
+  `/ecg`, `/ecg/synthetic`
+- Thang điểm CHA2DS2-VASc/HAS-BLED, TTR, care-gap detector, trùng nhóm thuốc
+- Hồi quy: câu phủ định ("không ghi nhận đái tháo đường") không bị tính nhầm
+  thành dương tính — lỗi thật đã phát hiện và sửa trong quá trình phát triển
+- Idempotent: chạy 3 lần liên tiếp không lỗi
+- File hỏng/sai định dạng trả lỗi rõ nghĩa, không crash 500
 
 ---
 
-## 9. Hướng phát triển
+## Cấu trúc thư mục
 
-- Mở rộng bộ luật lâm sàng cho nhiều chuyên khoa hơn.
-- Tăng độ phong phú của thư viện ca bệnh mẫu phục vụ giảng dạy.
-- Bổ sung so sánh đa lần khám và theo dõi dài hạn.
-- Hoàn thiện trải nghiệm trên thiết bị di động.
+```
+.
+├── App.jsx                    # Frontend — React single-file, ~6500 dòng
+├── main.py                    # Backend — FastAPI, pipeline 3 bước (LLM → rule engine → LLM)
+├── clinical_rules.py          # Rule engine tất định — KHÔNG qua LLM (an toàn-tính mạng)
+├── ecg_engine.py              # Số hóa ảnh ECG (Mức 1: trích tín hiệu)
+├── document_extract.py        # Trích text từ Word/Excel/PowerPoint
+├── test_main.py                # Script test pytest
+├── requirements.txt            # Dependency production
+├── requirements-dev.txt        # + pytest, httpx (chỉ cho test)
+├── docker-compose.yml
+├── docker_setup/
+│   ├── Dockerfile.backend
+│   ├── Dockerfile.frontend
+│   ├── mount.jsx               # Entry point React (createRoot) cho bản Docker
+│   └── index.html
+├── .env.example
+└── medparcours_roadmap_v2.md   # Kế hoạch kỹ thuật + business chi tiết
+```
+
+### Kiến trúc pipeline backend (3 bước hybrid)
+
+```
+PDF/Word/Excel/PowerPoint
+        │
+        ▼
+  Trích text (pypdf / python-docx / openpyxl / python-pptx)
+        │
+        ▼
+  Bước 1 (LLM): Claude đọc → JSON có cấu trúc (KHÔNG đánh giá)
+        │
+        ▼
+  Bước 2 (Rule Engine Python, clinical_rules.py): TẤT ĐỊNH, không LLM
+    - eGFR (CKD-EPI 2021), an toàn thuốc, CHA2DS2-VASc/HAS-BLED, TTR, care-gaps
+        │
+        ▼
+  Bước 3 (LLM): Claude diễn đạt xu hướng (CHỈ từ delta rule engine, không bịa)
+        │
+        ▼
+  Báo cáo có cấu trúc → Frontend (App.jsx)
+```
+
+**Nguyên tắc cốt lõi:** mọi logic an toàn-tính mạng (eGFR, ngưỡng INR, thang
+điểm nguy cơ, tương tác thuốc) nằm trong rule engine Python tất định —
+KHÔNG bao giờ để LLM tự suy luận các con số này.
 
 ---
 
-## 10. Đội ngũ Team UN1SVENGERS
+## Triển khai thật (không phải demo)
 
-| Thành viên | Vai trò |
-|---|---|
-| Đăng | Tech Lead, Quản lý sản phẩm |
-| Đức Thành | Frontend, Đồng trưởng nhóm kỹ thuật |
-| Tấn | Chuyên môn lâm sàng |
-| Ngân | Chuyên môn lâm sàng |
-| An | Phụ trách kinh doanh |
+- **Frontend:** GitHub Pages (xem `ASSET_BASE` trong App.jsx tự tính theo path deploy)
+- **Backend:** Hugging Face Spaces (Docker) — xem Space để biết URL hiện tại
 
----
-
-## Lưu ý
-
-MedParcours AI là công cụ hỗ trợ ra quyết định. Mọi báo cáo do hệ thống tạo ra cần được bác sĩ xem xét và chịu trách nhiệm trước khi sử dụng cho mục đích lâm sàng.
-
-*Sản phẩm dự thi Vietnamese Student HackAIthon 2026 - Team UN1SVENGERS.*
+Đổi `window.MEDIFLOW_API_URL` trong `index.html` nếu backend đổi URL, không
+cần sửa `App.jsx`.
