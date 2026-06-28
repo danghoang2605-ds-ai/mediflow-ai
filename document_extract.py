@@ -114,6 +114,9 @@ EXTRACTORS = {
 SUPPORTED_EXTENSIONS = set(EXTRACTORS.keys()) | {".pdf"}
 # Ảnh CHƯA hỗ trợ — liệt kê riêng để main.py trả lỗi đúng nghĩa "chưa hỗ trợ"
 # thay vì lỗi chung, và để FE có thể đồng bộ lại accept/chip hiển thị sau.
+# Tên biến giữ "UNSUPPORTED" cho các phần khác trong code không phải đổi,
+# nhưng PNG/JPG GIỜ ĐÃ ĐƯỢC XỬ LÝ qua Claude Vision (xem main.py /analyze) -
+# chỉ .doc/.xls/.ppt (định dạng Office 97-2003 cũ) còn thực sự chưa hỗ trợ.
 UNSUPPORTED_BUT_LISTED_IN_UI = {".png", ".jpg", ".jpeg", ".doc", ".xls", ".ppt"}
 # Lưu ý: .doc/.xls/.ppt (định dạng cũ, không phải Open XML .docx/.xlsx/.pptx)
 # KHÔNG được hỗ trợ bởi python-docx/openpyxl/python-pptx — cần thư viện khác

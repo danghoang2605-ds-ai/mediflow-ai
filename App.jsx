@@ -135,6 +135,37 @@ const CSS = `
   .card-body{padding:20px}
   .collapse-btn{width:24px;height:24px;border-radius:7px;border:none;background:rgba(29,111,232,0.07);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:all .15s;flex-shrink:0;font-size:11px}
   .collapse-btn:hover{background:rgba(29,111,232,0.14);color:var(--blue)}
+  .card-tool-btn{width:24px;height:24px;border-radius:7px;border:none;background:transparent;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;color:#B6C2D4;transition:all .15s;flex-shrink:0}
+  .card-tool-btn:hover{background:rgba(29,111,232,0.1);color:var(--blue)}
+  .card-tool-btn.has-content{background:rgba(29,111,232,0.08)}
+  .card-edit-display{margin-top:14px;padding:11px 13px;background:#EFF6FF;border:1px solid #BFDBFE;border-left:3px solid #1D6FE8;border-radius:10px}
+  .card-edit-display-hd{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:#1D6FE8;text-transform:uppercase;letter-spacing:.03em;margin-bottom:5px}
+  .card-edit-display-txt{font-size:13px;color:var(--navy);line-height:1.55;white-space:pre-wrap}
+  .card-edit-box{padding:13px 18px;border-top:1px solid var(--border);background:#F8FAFC}
+  .card-edit-ta{width:100%;min-height:80px;border:1px solid #BFDBFE;border-radius:10px;padding:10px 12px;font-size:13px;font-family:inherit;color:var(--navy);resize:vertical;box-sizing:border-box}
+  .card-edit-ta:focus{outline:none;border-color:#1D6FE8;box-shadow:0 0 0 3px rgba(29,111,232,.12)}
+  .card-edit-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:9px}
+  .card-edit-cancel{padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:#fff;color:var(--muted2);font-size:12.5px;font-weight:600;cursor:pointer}
+  .card-edit-cancel:hover{background:#F1F5F9}
+  .card-edit-save{padding:6px 16px;border-radius:8px;border:none;background:#1D6FE8;color:#fff;font-size:12.5px;font-weight:600;cursor:pointer}
+  .card-edit-save:hover{background:#1A5FCC}
+  .card-note-box{display:flex;align-items:center;gap:9px;padding:10px 18px;border-top:1px dashed #FBBF24;background:#FFFBEB}
+  .card-note-input{flex:1;border:none;background:transparent;font-size:13px;color:#92400E;font-family:inherit;outline:none}
+  .card-note-input::placeholder{color:#D6A85C}
+  .card-note-saved{cursor:pointer}
+  .card-note-saved-txt{flex:1;font-size:13px;color:#92400E;white-space:pre-wrap;line-height:1.5}
+  body.theme-dark .card-tool-btn{color:#5A6B85}
+  body.theme-dark .card-tool-btn:hover{background:rgba(127,176,255,.12);color:#7FB0FF}
+  body.theme-dark .card-tool-btn.has-content{background:rgba(127,176,255,.1)}
+  body.theme-dark .card-edit-display{background:#0F1A2C;border-color:#28364E;border-left-color:#5FA8FF}
+  body.theme-dark .card-edit-display-hd{color:#7FB0FF}
+  body.theme-dark .card-edit-display-txt{color:#EAF1FB}
+  body.theme-dark .card-edit-box{background:#0F1A2C;border-color:#28364E}
+  body.theme-dark .card-edit-ta{background:#141E2C;border-color:#2A3A52;color:#EAF1FB}
+  body.theme-dark .card-edit-cancel{background:#1B2536;border-color:#2F4368;color:#9FB3CC}
+  body.theme-dark .card-note-box{background:#241E10;border-top-color:#5c4a1a}
+  body.theme-dark .card-note-input,body.theme-dark .card-note-saved-txt{color:#FCD34D}
+  body.theme-dark .card-note-input::placeholder{color:#8A6F2E}
 
   .badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:4px 10px;border-radius:8px;border:1px solid;white-space:nowrap}
   .badge-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
@@ -189,11 +220,19 @@ const CSS = `
   .upload-zone{border-radius:28px;padding:44px 36px;text-align:center;cursor:pointer;transition:all .2s;border:2px dashed rgba(29,111,232,0.3);background:rgba(255,255,255,0.82);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 8px 40px rgba(30,80,200,0.1)}
   .upload-zone:hover{border-color:var(--blue);background:rgba(235,244,255,0.6)}
   .upload-zone.drag{border-color:var(--blue);background:rgba(235,244,255,0.7);transform:scale(1.012);box-shadow:0 0 0 6px rgba(29,111,232,0.08),0 12px 40px rgba(29,111,232,0.12)}
+  .upload-choice-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:760px){.upload-choice-row{grid-template-columns:1fr}}
+  .upload-choice{padding:32px 22px}
+  .upload-choice-ecg{border-color:rgba(220,38,38,0.28)}
+  .upload-choice-ecg:hover{border-color:#DC2626;background:rgba(254,242,242,0.6)}
+  .upload-icon-ecg{background:linear-gradient(135deg,rgba(220,38,38,0.1),rgba(251,146,60,0.1))}
   .upload-icon{width:70px;height:70px;margin:0 auto 18px;border-radius:20px;background:linear-gradient(135deg,rgba(29,111,232,0.1),rgba(6,182,212,0.1));display:flex;align-items:center;justify-content:center}
   .upload-title{font-size:17.5px;font-weight:600;color:var(--navy);margin-bottom:6px}
   .upload-sub{font-size:14px;color:var(--muted);margin-bottom:22px}
   .btn-primary{display:inline-flex;align-items:center;gap:8px;padding:10px 24px;border-radius:12px;background:linear-gradient(135deg,var(--blue),var(--cyan));color:#fff;font-size:13px;font-weight:600;border:none;cursor:pointer;box-shadow:0 4px 14px rgba(29,111,232,0.3);transition:all .15s;font-family:inherit}
   .btn-primary:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(29,111,232,0.35)}
+  .btn-primary-ecg{background:linear-gradient(135deg,#DC2626,#F97316);box-shadow:0 4px 14px rgba(220,38,38,0.3)}
+  .btn-primary-ecg:hover{box-shadow:0 6px 18px rgba(220,38,38,0.35)}
   .upload-privacy{font-size:11px;color:#BDD0EE;margin-top:12px}
   .upload-err{background:rgba(254,242,242,0.95);border:1px solid #FECACA;border-radius:14px;padding:12px 14px;margin-bottom:14px;backdrop-filter:blur(8px)}
   .upload-err-row{display:flex;align-items:center;gap:8px}
@@ -790,6 +829,8 @@ function Svg({ d = 20, children, style, color }) {
   )
 }
 const Icon = {
+  Pencil:     p => <Svg {...p}><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></Svg>,
+  Note:       p => <Svg {...p}><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9z"/><polyline points="14 3 14 9 20 9"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></Svg>,
   Cross:      p => <Svg {...p}><rect x="3" y="3" width="18" height="18" rx="3"/><line x1="12" y1="7" x2="12" y2="17"/><line x1="7" y1="12" x2="17" y2="12"/></Svg>,
   Upload:     p => <Svg {...p}><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></Svg>,
   FileText:   p => <Svg {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></Svg>,
@@ -1964,6 +2005,37 @@ let CURRENT_PKEY = "x"
 function Card({ id, title, icon, children, headRight, defaultCollapsed = false }) {
   const [collapsed, setCollapsed] = useGlobalCollapse(defaultCollapsed)
   const bodyRef = useRef(null)
+  const widgetId = id || (typeof title === "string" ? title : "card")
+
+  // ─── Chỉnh sửa: bác sĩ bổ sung/ghi đè phần diễn giải hiển thị ngay trong
+  // card (KHÔNG sửa số liệu thô đã tính từ rule engine — tránh phá vỡ "1
+  // nguồn sự thật" của hệ thống). Lưu sessionStorage theo bệnh nhân+widget.
+  const [editing, setEditing] = useState(false)
+  const [editText, setEditText] = useState(() => noteGet(CURRENT_PKEY, widgetId + "_edit"))
+  const startEdit = () => { setEditText(noteGet(CURRENT_PKEY, widgetId + "_edit")); setEditing(true) }
+  const saveEdit = () => { noteSet(CURRENT_PKEY, widgetId + "_edit", editText); setEditing(false); mpToast(editText.trim() ? "Đã lưu chỉnh sửa" : "Đã xóa nội dung chỉnh sửa") }
+  const cancelEdit = () => { setEditing(false) }
+  const savedEdit = noteGet(CURRENT_PKEY, widgetId + "_edit")
+
+  // ─── Ghi chú: chỉ hiện ô nhập khi bác sĩ bấm vào, KHÔNG hiện chữ "Ghi chú"
+  // nếu chưa bấm. Nếu bấm vào mà không gõ gì rồi rời đi (blur) -> tự ẩn lại,
+  // tránh rườm rà theo đúng yêu cầu.
+  const [noteOpen, setNoteOpen] = useState(false)
+  const [noteText, setNoteText] = useState(() => noteGet(CURRENT_PKEY, widgetId))
+  const savedNote = noteGet(CURRENT_PKEY, widgetId)
+  const noteRef = useRef(null)
+  const openNote = () => { setNoteText(noteGet(CURRENT_PKEY, widgetId)); setNoteOpen(true); setTimeout(()=>noteRef.current?.focus(), 30) }
+  const blurNote = () => {
+    const had = !!savedNote
+    noteSet(CURRENT_PKEY, widgetId, noteText)
+    if (!noteText.trim()) {
+      setNoteOpen(false)
+      if (had) mpToast("Đã xóa ghi chú")
+    } else if (noteText !== savedNote) {
+      mpToast("Đã lưu ghi chú")
+    }
+  }
+
   return (
     <div id={id} className={`card${collapsed ? " collapsed" : ""}`}>
       <div className="card-head">
@@ -1971,6 +2043,12 @@ function Card({ id, title, icon, children, headRight, defaultCollapsed = false }
         <span className="card-head-title">{title}</span>
         <div className="card-head-right">
           {headRight}
+          <button className={`card-tool-btn${savedEdit?" has-content":""}`} onClick={startEdit} title="Chỉnh sửa / bổ sung thông tin" aria-label="Chỉnh sửa">
+            <Icon.Pencil d={13} color={savedEdit?"#1D6FE8":"currentColor"}/>
+          </button>
+          <button className={`card-tool-btn${savedNote?" has-content":""}`} onClick={openNote} title="Ghi chú" aria-label="Ghi chú">
+            <Icon.Note d={13} color={savedNote?"#D97706":"currentColor"}/>
+          </button>
           {title ? <FlagBtn pkey={CURRENT_PKEY} label={typeof title === "string" ? title : "Mục báo cáo"} sub="Mục trong báo cáo" detail={()=>elText(bodyRef.current)}/> : null}
           {title ? <CopyBtn text={()=>elText(bodyRef.current)} label=""/> : null}
           <button className="collapse-btn" onClick={() => setCollapsed(c => !c)} title={collapsed ? "Mở rộng" : "Thu gọn"}>
@@ -1978,7 +2056,39 @@ function Card({ id, title, icon, children, headRight, defaultCollapsed = false }
           </button>
         </div>
       </div>
-      <div className="card-body" ref={bodyRef}>{children}</div>
+      <div className="card-body" ref={bodyRef}>
+        {children}
+        {savedEdit && !editing && (
+          <div className="card-edit-display">
+            <div className="card-edit-display-hd"><Icon.Pencil d={11} color="#1D6FE8"/>Bác sĩ bổ sung</div>
+            <div className="card-edit-display-txt">{savedEdit}</div>
+          </div>
+        )}
+      </div>
+      {editing && (
+        <div className="card-edit-box">
+          <textarea className="card-edit-ta" autoFocus value={editText} onChange={e=>setEditText(e.target.value)}
+            placeholder="Bổ sung hoặc ghi đè thông tin hiển thị cho mục này..."/>
+          <div className="card-edit-actions">
+            <button className="card-edit-cancel" onClick={cancelEdit}>Hủy</button>
+            <button className="card-edit-save" onClick={saveEdit}>Lưu</button>
+          </div>
+        </div>
+      )}
+      {noteOpen && (
+        <div className="card-note-box">
+          <Icon.Note d={13} color="#D97706"/>
+          <input ref={noteRef} className="card-note-input" value={noteText} onChange={e=>setNoteText(e.target.value)}
+            onBlur={blurNote} onKeyDown={e=>{ if(e.key==="Enter"){ e.preventDefault(); blurNote() } }}
+            placeholder="Ghi chú riêng cho mục này..."/>
+        </div>
+      )}
+      {!noteOpen && savedNote && (
+        <div className="card-note-box card-note-saved" onClick={openNote}>
+          <Icon.Note d={13} color="#D97706"/>
+          <span className="card-note-saved-txt">{savedNote}</span>
+        </div>
+      )}
     </div>
   )
 }
@@ -2516,6 +2626,13 @@ const FILE_KINDS = {
 }
 const kindOf = (name) => FILE_KINDS[(name.split(".").pop() || "").toLowerCase()] || { tag:"FILE", color:"#64748B", bg:"#F1F5F9" }
 const fmtSize = (b) => b < 1024 ? `${b} B` : b < 1048576 ? `${(b/1024).toFixed(0)} KB` : `${(b/1048576).toFixed(1)} MB`
+const fmtDateTime = (iso) => {
+  try {
+    const d = new Date(iso)
+    const pad = n => String(n).padStart(2,"0")
+    return `${pad(d.getHours())}:${pad(d.getMinutes())} ${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}`
+  } catch { return iso || "" }
+}
 
 // Đếm số trang PDF phía client (heuristic, không cần thư viện)
 async function countPdfPages(file) {
@@ -2679,26 +2796,42 @@ function UploadPage({ onUpload, isLoading, loadingMsg, error, onDismissError, on
               </div>
             </div>
           ) : staged.length === 0 ? (
-            <div className={`upload-zone${dragging?" drag":""}`}
-              onDragOver={e=>{e.preventDefault();setDragging(true)}}
-              onDragLeave={()=>setDragging(false)}
-              onDrop={e=>{e.preventDefault();setDragging(false);addFiles(e.dataTransfer.files)}}
-              onClick={()=>inputRef.current.click()}>
-              <div style={{padding:"16px 0"}}>
-                <div className="upload-icon"><Icon.Upload d={26} color="#1D6FE8"/></div>
-                <p className="upload-title">Kéo thả hoặc nhấn để chọn</p>
-                <p className="upload-sub">PDF, Word, Excel, PowerPoint — ảnh cần OCR đang phát triển</p>
-                <button className="btn-primary" onClick={e=>{e.stopPropagation();inputRef.current.click()}}><Icon.Upload d={15} color="white"/>Chọn tài liệu</button>
-                <div className="fmt-row">
-                  <span className="fmt-lbl">Định dạng hỗ trợ</span>
-                  <div className="fmt-chips">
-                    {["PDF","DOCX","XLSX","PPTX"].map(t=>{
-                      const k = FILE_KINDS[t.toLowerCase()] || kindOf("x."+t.toLowerCase())
-                      return <span key={t} className="fmt-chip" style={{color:k.color,background:k.bg}}>{t}</span>
-                    })}
-                    {["PNG","JPG"].map(t=>(
-                      <span key={t} className="fmt-chip fmt-chip-soon" title="Cần OCR, đang phát triển (giai đoạn 2)">{t} (sắp có)</span>
-                    ))}
+            <div className="upload-choice-row">
+              <div className={`upload-zone upload-choice${dragging?" drag":""}`}
+                onDragOver={e=>{e.preventDefault();setDragging(true)}}
+                onDragLeave={()=>setDragging(false)}
+                onDrop={e=>{e.preventDefault();setDragging(false);addFiles(e.dataTransfer.files)}}
+                onClick={()=>inputRef.current.click()}>
+                <div style={{padding:"16px 0"}}>
+                  <div className="upload-icon"><Icon.Upload d={26} color="#1D6FE8"/></div>
+                  <p className="upload-title">Bệnh án</p>
+                  <p className="upload-sub">Kéo thả hoặc nhấn để chọn — PDF, Word, Excel, PowerPoint, ảnh chụp/scan</p>
+                  <button className="btn-primary" onClick={e=>{e.stopPropagation();inputRef.current.click()}}><Icon.Upload d={15} color="white"/>Chọn tài liệu</button>
+                  <div className="fmt-row">
+                    <span className="fmt-lbl">Định dạng hỗ trợ</span>
+                    <div className="fmt-chips">
+                      {["PDF","DOCX","XLSX","PPTX","PNG","JPG"].map(t=>{
+                        const k = FILE_KINDS[t.toLowerCase()] || kindOf("x."+t.toLowerCase())
+                        return <span key={t} className="fmt-chip" style={{color:k.color,background:k.bg}}>{t}</span>
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="upload-zone upload-choice upload-choice-ecg" onClick={onOpenEcg}>
+                <div style={{padding:"16px 0"}}>
+                  <div className="upload-icon upload-icon-ecg"><Icon.Pulse d={26} color="#DC2626"/></div>
+                  <p className="upload-title">Quét điện tâm đồ</p>
+                  <p className="upload-sub">Số hóa ảnh ECG và đọc điện tim — không cần đã có hồ sơ</p>
+                  <button className="btn-primary btn-primary-ecg" onClick={e=>{e.stopPropagation();onOpenEcg()}}><Icon.Pulse d={15} color="white"/>Quét ECG</button>
+                  <div className="fmt-row">
+                    <span className="fmt-lbl">Định dạng hỗ trợ</span>
+                    <div className="fmt-chips">
+                      {["PNG","JPG"].map(t=>(
+                        <span key={t} className="fmt-chip" style={{color:"#DC2626",background:"#FEF2F2"}}>{t}</span>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2754,7 +2887,7 @@ function UploadPage({ onUpload, isLoading, loadingMsg, error, onDismissError, on
               <p className="upload-privacy">Bác sĩ kiểm tra định dạng và số trang trước khi quét. Dữ liệu xử lý bảo mật.</p>
             </div>
           )}
-          {!isLoading&&staged.length===0&&<div style={{textAlign:"center"}}><span className="demo-link" onClick={()=>onUpload(null)}>Xem demo: hồ sơ Nguyễn Văn A <span style={{fontSize:10}}>▶</span></span> <button className="hist-link" onClick={onOpenHistory}><Icon.FileText d={13} color="#1D6FE8"/>Lịch sử bệnh án</button> <button className="hist-link" onClick={onOpenEcg}><Icon.Pulse d={13} color="#1D6FE8"/>Quét điện tâm đồ</button></div>}
+          {!isLoading&&staged.length===0&&<div style={{textAlign:"center"}}><span className="demo-link" onClick={()=>onUpload(null)}>Xem demo: hồ sơ Nguyễn Văn A <span style={{fontSize:10}}>▶</span></span> <button className="hist-link" onClick={onOpenHistory}><Icon.FileText d={13} color="#1D6FE8"/>Lịch sử bệnh án</button></div>}
           {!isLoading && (
             <div className="rec-inline-wrap">
               <div className="rec-inline-h"><Icon.Pulse d={13} color="#1D6FE8"/>Lời dặn của bác sĩ - gõ trực tiếp hoặc bấm micro để đọc</div>
@@ -2953,6 +3086,10 @@ function ReportPage({ report, hoSoText, analysis, onReset, chatMessages, setChat
             </div>
             <FocusToggle/>
             <ThemeToggle/>
+            <button className="nav-bm-btn" onClick={()=>setBmOpen(true)} title="Mục đã đánh dấu" aria-label="Mục đã đánh dấu">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill={bmList.length>0?"currentColor":"none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+              {bmList.length>0 && <span className="nav-bm-badge">{bmList.length}</span>}
+            </button>
             <button className="nav-export" onClick={()=>triggerPrint(report, viewMode, docNote, bmList, analysis)} title="Xuất báo cáo"><Icon.Print d={14} color="#fff"/>Xuất báo cáo</button>
             <div className="nav-menu-wrap">
               <button className="nav-burger" onClick={()=>setMenuOpen(o=>!o)} title="Menu" aria-label="Menu">
@@ -2967,7 +3104,7 @@ function ReportPage({ report, hoSoText, analysis, onReset, chatMessages, setChat
                   <button onClick={()=>{setMenuOpen(false);exportLabsCSV(report)}}><Icon.Flask d={14} color="#475569"/>Xuất xét nghiệm (CSV)</button>
                   <button onClick={()=>{setMenuOpen(false); (async()=>{ try{ await navigator.clipboard.writeText(reportToText(report)); mpToast("Đã sao chép toàn bộ báo cáo") }catch{ mpToast("Không sao chép được","err") } })()}}><Icon.FileText d={14} color="#475569"/>Sao chép toàn bộ báo cáo</button>
                   <div className="nav-menu-sec">Công cụ</div>
-                  <button onClick={()=>{setMenuOpen(false);setBmOpen(true)}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>Mục đã đánh dấu ({bmList.length})</button>
+                  <button onClick={()=>{setMenuOpen(false);setBmOpen(true)}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>Mục đã đánh dấu{bmList.length>0?` (${bmList.length})`:""}</button>
                   <button onClick={()=>{setMenuOpen(false);mpCards(true)}}><Icon.ChevUp d={14} color="#475569"/>Thu gọn tất cả thẻ</button>
                   <button onClick={()=>{setMenuOpen(false);mpCards(false)}}><Icon.ChevDown d={14} color="#475569"/>Mở rộng tất cả thẻ</button>
                   <button onClick={()=>{setMenuOpen(false);mpHelp()}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 20h8M7 8h.01M11 8h.01M15 8h.01M7 12h.01M17 12h.01M11 12h2"/></svg>Phím tắt</button>
@@ -3398,6 +3535,20 @@ function bmGet(pkey){ try{ return JSON.parse(sessionStorage.getItem(bmKey(pkey))
 function bmSet(pkey, arr){ try{ sessionStorage.setItem(bmKey(pkey), JSON.stringify(arr)) }catch{} ; if(typeof window!=="undefined") window.dispatchEvent(new CustomEvent("mp-bm",{detail:{pkey}})) }
 function bmToggle(pkey, item){ const arr=bmGet(pkey); const i=arr.findIndex(x=>x.label===item.label); let added; if(i>=0){ arr.splice(i,1); added=false } else { arr.push({label:item.label, sub:item.sub||"", detail:item.detail||"", anchor:item.anchor||"", ts:Date.now()}); added=true } bmSet(pkey,arr); return added }
 function bmHas(pkey,label){ return bmGet(pkey).some(x=>x.label===label) }
+
+// ─── Ghi chú bác sĩ trên widget (per bệnh nhân + per widget id) ──────────────
+// Lưu sessionStorage, KHÔNG lưu chuỗi rỗng (tránh rác key khi bác sĩ bấm vào
+// ô ghi chú rồi không gõ gì và rời đi — đúng yêu cầu "tránh rườm rà").
+function noteKey(pkey, widgetId){ return "mp_note_" + (pkey||"x") + "_" + widgetId }
+function noteGet(pkey, widgetId){ try{ return sessionStorage.getItem(noteKey(pkey,widgetId)) || "" }catch{ return "" } }
+function noteSet(pkey, widgetId, text){
+  try{
+    const k = noteKey(pkey,widgetId)
+    if (text && text.trim()) sessionStorage.setItem(k, text)
+    else sessionStorage.removeItem(k)
+  }catch{}
+}
+
 function FlagBtn({ pkey, label, sub, detail }){
   const [on,setOn]=useState(()=>bmHas(pkey,label))
   useEffect(()=>{ const h=()=>setOn(bmHas(pkey,label)); window.addEventListener("mp-bm",h); return ()=>window.removeEventListener("mp-bm",h) },[pkey,label])
@@ -3408,18 +3559,43 @@ function FlagBtn({ pkey, label, sub, detail }){
     </button>
   )
 }
+// Chọn icon phù hợp theo "sub" (loại mục) để mỗi bookmark dễ nhận diện nhanh
+// hơn là chỉ có 1 icon lá cờ lặp lại — feedback: panel cũ "chưa đẹp", phẳng,
+// không phân biệt được loại nội dung khi danh sách dài.
+function bmIconFor(sub) {
+  const s = (sub || "").toLowerCase()
+  if (s.includes("hành động") || s.includes("ưu tiên")) return <Icon.ShieldCheck d={15} color="#B45309"/>
+  if (s.includes("hội chẩn")) return <Icon.Stethoscope d={15} color="#7C3AED"/>
+  if (s.includes("giảng dạy")) return <Icon.FileText d={15} color="#0E9488"/>
+  if (s.includes("xét nghiệm") || s.includes("chỉ số")) return <Icon.Flask d={15} color="#1D6FE8"/>
+  if (s.includes("diễn biến") || s.includes("tổng quan")) return <Icon.Clock d={15} color="#1D6FE8"/>
+  return <Icon.Alert d={15} color="#DC2626"/>
+}
 function BookmarkPanel({ pkey, items, onClose, onGo }){
   const [openI, setOpenI] = useState(-1)
   return (
     <div className="bm-ov" onClick={onClose}>
       <div className="bm-panel" onClick={e=>e.stopPropagation()}>
-        <div className="bm-head"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/></svg><span>Trang đã đánh dấu theo dõi</span>{items && items.length>0 && <CopyBtn text={()=>items.map(it=>"## "+it.label+"\n"+(it.detail||it.sub||"")).join("\n\n")} label=""/>}<button className="dn-x" onClick={onClose} aria-label="Đóng"><Icon.Close d={14} color="#64748B"/></button></div>
+        <div className="bm-head">
+          <span className="bm-head-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/></svg></span>
+          <span>Mục đã đánh dấu theo dõi</span>
+          {items && items.length>0 && <span className="bm-count-chip">{items.length}</span>}
+          <span style={{marginLeft:"auto",display:"inline-flex",gap:"6px",alignItems:"center"}}>
+            {items && items.length>0 && <CopyBtn text={()=>items.map(it=>"## "+it.label+"\n"+(it.detail||it.sub||"")).join("\n\n")} label=""/>}
+            <button className="fp-close" onClick={onClose} title="Đóng" aria-label="Đóng"><Icon.Close d={15} color="#475569"/></button>
+          </span>
+        </div>
         <div className="bm-body">
-          {(!items || items.length===0) && <div className="bm-empty">Chưa có mục nào được đánh dấu. Bấm biểu tượng cờ ở mỗi phần trong báo cáo (mọi chế độ) để thêm vào đây theo dõi.</div>}
+          {(!items || items.length===0) && (
+            <div className="bm-empty">
+              <span className="bm-empty-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg></span>
+              Chưa có mục nào được đánh dấu.<br/>Bấm biểu tượng cờ ở mỗi phần trong báo cáo (mọi chế độ) để thêm vào đây theo dõi.
+            </div>
+          )}
           {items.map((it,i)=>(
             <div key={i} className={`bm-item${openI===i?" open":""}`}>
               <div className="bm-item-top" onClick={()=>setOpenI(openI===i?-1:i)}>
-                <span className="bm-flag"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/></svg></span>
+                <span className="bm-icon-badge">{bmIconFor(it.sub)}</span>
                 <div className="bm-main"><div className="bm-label">{it.label}</div><div className="bm-sub">{it.sub||"Mục báo cáo"}</div></div>
                 <button className="bm-go" onClick={(e)=>{e.stopPropagation(); onGo && onGo(it)}} title="Đi tới phần này trong báo cáo"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
                 <span className="bm-chev">{openI===i ? <Icon.ChevUp d={14} color="#94A3B8"/> : <Icon.ChevDown d={14} color="#94A3B8"/>}</span>
@@ -4912,6 +5088,22 @@ const HISTORY = [
   { id:"BN-B", ...recMeta(PATIENT_B) },
 ]
 
+// ─── Lịch sử quét ECG (lưu sessionStorage, KHÔNG bao gồm 2 mẫu demo tĩnh) ────
+// Tích hợp theo yêu cầu: mục "Lịch sử bệnh án" cũng hiện các lượt quét ECG đã
+// thực hiện, không chỉ hồ sơ bệnh án. Mỗi lượt quét ảnh thật qua /ecg (không
+// phải bấm "Xem demo") được lưu lại với thời điểm quét, để bác sĩ xem lại.
+const ECG_HIST_KEY = "mp_ecg_history"
+function loadEcgHistory() {
+  try { return JSON.parse(sessionStorage.getItem(ECG_HIST_KEY) || "[]") } catch { return [] }
+}
+function saveEcgHistoryEntry(entry) {
+  try {
+    const list = loadEcgHistory()
+    list.unshift(entry)
+    sessionStorage.setItem(ECG_HIST_KEY, JSON.stringify(list.slice(0, 20)))
+  } catch {}
+}
+
 // ─── Lời chào chatbot theo ngữ cảnh (mode) ───────────────────────────────────
 function modeGreeting(mode, name){
   const n = name || "này"
@@ -5562,7 +5754,16 @@ function TeachingView({ report }){
 }
 
 // ─── Lịch sử bệnh án (overlay) ────────────────────────────────────────────────
-function HistoryPanel({ onClose, onOpen, currentId }){
+function HistoryPanel({ onClose, onOpen, onOpenEcgEntry, currentId }){
+  const ecgList = loadEcgHistory()
+  const demoEntries = Object.entries(ECG_DEMO_SAMPLES).map(([key, sample]) => ({
+    id: "demo-" + key,
+    ten_file: sample.ten,
+    is_demo: true,
+    bpm: sample.doc_diem_lam_sang?.tan_so?.gia_tri ?? sample.heart_rate?.bpm_avg ?? null,
+    nhip_deu: null,
+    result: sample,
+  }))
   return (
     <div className="hist-overlay" onClick={onClose}>
       <div className="hist-modal" onClick={e=>e.stopPropagation()}>
@@ -5582,6 +5783,33 @@ function HistoryPanel({ onClose, onOpen, currentId }){
               <span className="hist-open">Mở ▶</span>
             </div>
           ))}
+          {(ecgList.length > 0 || demoEntries.length > 0) && (
+            <>
+              <div className="hist-section-lbl"><Icon.Pulse d={13} color="#DC2626"/>Lịch sử quét điện tâm đồ</div>
+              {ecgList.map(e=>(
+                <div key={e.id} className="hist-item hist-item-ecg" onClick={()=>onOpenEcgEntry(e)}>
+                  <div className="hist-avatar hist-avatar-ecg"><Icon.Pulse d={15} color="#DC2626"/></div>
+                  <div className="hist-info">
+                    <div className="hist-name">{e.ten_file}</div>
+                    <div className="hist-dx">{e.bpm != null ? `${e.bpm} lần/phút` : "Không xác định tần số"}{e.nhip_deu === false ? " · nghi ngờ nhịp không đều" : ""}</div>
+                    <div className="hist-foot"><Icon.Clock d={11} color="#94a3b8"/>{fmtDateTime(e.thoi_diem)}</div>
+                  </div>
+                  <span className="hist-open">Mở ▶</span>
+                </div>
+              ))}
+              {demoEntries.map(e=>(
+                <div key={e.id} className="hist-item hist-item-ecg hist-item-ecg-demo" onClick={()=>onOpenEcgEntry(e)}>
+                  <div className="hist-avatar hist-avatar-ecg"><Icon.Pulse d={15} color="#DC2626"/></div>
+                  <div className="hist-info">
+                    <div className="hist-name">{e.ten_file} <span className="hist-demo-tag">Mẫu demo</span></div>
+                    <div className="hist-dx">{e.bpm != null ? `${e.bpm} lần/phút` : "Không xác định tần số"}</div>
+                    <div className="hist-foot"><Icon.Clock d={11} color="#94a3b8"/>Ảnh ECG thật dùng để minh họa tính năng</div>
+                  </div>
+                  <span className="hist-open">Mở ▶</span>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -5699,12 +5927,12 @@ function EcgReadingForm({ result, dd }) {
   )
 }
 
-function EcgPanel({ onClose }) {
-  const [staged, setStaged] = useState(null)      // { url, name } ảnh đã chọn
+function EcgPanel({ onClose, initialResult }) {
+  const [staged, setStaged] = useState(initialResult ? { url: initialResult.result.image_base64 || initialResult.result.image_preview_url || null, name: initialResult.ten_file } : null)
   const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState(null)       // response từ /ecg (hoặc demo tĩnh)
+  const [result, setResult] = useState(initialResult ? initialResult.result : null)       // response từ /ecg (hoặc demo tĩnh, hoặc lịch sử cũ)
   const [error, setError] = useState(null)
-  const [isDemo, setIsDemo] = useState(false)
+  const [isDemo, setIsDemo] = useState(!!(initialResult && initialResult.is_demo))
   const inputRef = useRef()
 
   const reset = () => { setStaged(null); setResult(null); setError(null); setIsDemo(false) }
@@ -5745,6 +5973,14 @@ function EcgPanel({ onClose }) {
       const data = await res.json()
       if (!res.ok || !data.success) throw new Error(data?.detail || "Không số hóa được ảnh.")
       setResult(data)
+      saveEcgHistoryEntry({
+        id: "ecg-" + Date.now(),
+        ten_file: staged.name,
+        thoi_diem: new Date().toISOString(),
+        bpm: data?.heart_rate?.bpm_avg ?? null,
+        nhip_deu: data?.heart_rate?.nhip_deu_theo_nguong_sach ?? null,
+        result: data,
+      })
     } catch (e) {
       setError(e.message || "Lỗi không xác định khi xử lý ảnh.")
     }
@@ -5792,16 +6028,27 @@ function EcgPanel({ onClose }) {
         {staged && (
           <div className="ecg-workspace-v2">
             <div className="ecg-top-row">
-              <div className="ecg-col">
-                <div className="ecg-col-label">Ảnh gốc{isDemo ? " (mẫu demo)" : ""}</div>
-                <img src={staged.url} alt={staged.name} className="ecg-img"/>
-                <div className="ecg-actions">
-                  <button className="stage-clear" onClick={reset}>{isDemo ? "Quay lại" : "Chọn ảnh khác"}</button>
-                  {!result && !isDemo && <button className="btn-primary" onClick={analyze} disabled={loading}>
-                    {loading ? "Đang xử lý..." : "Số hóa & đọc điện tim"}
-                  </button>}
+              {staged.url ? (
+                <div className="ecg-col">
+                  <div className="ecg-col-label">Ảnh gốc{isDemo ? " (mẫu demo)" : ""}</div>
+                  <img src={staged.url} alt={staged.name} className="ecg-img"/>
+                  <div className="ecg-actions">
+                    <button className="stage-clear" onClick={reset}>{isDemo ? "Quay lại" : "Chọn ảnh khác"}</button>
+                    {!result && !isDemo && <button className="btn-primary" onClick={analyze} disabled={loading}>
+                      {loading ? "Đang xử lý..." : "Số hóa & đọc điện tim"}
+                    </button>}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="ecg-col">
+                  <div className="ecg-col-label">Lượt quét trước đó</div>
+                  <div className="rec-note warn" style={{margin:0}}>
+                    <Icon.Alert d={13} color="#92400e"/>
+                    Ảnh gốc không được lưu lại (chỉ lưu kết quả số hóa trong phiên làm việc này). Tải lại ảnh để xem lại ảnh gốc.
+                  </div>
+                  <div className="ecg-actions"><button className="stage-clear" onClick={reset}>Quay lại</button></div>
+                </div>
+              )}
 
               <div className="ecg-col">
                 <div className="ecg-col-label">Tín hiệu đã số hóa</div>
@@ -6049,33 +6296,41 @@ body.theme-dark .nav-menu-font button{background:#1B2536;border-color:#2F4368;co
 .prob-top{display:flex;align-items:center;gap:6px}
 .prob-top .flag-btn{margin-left:auto}
 .bm-ov{position:fixed;inset:0;z-index:130;background:rgba(15,39,64,.45);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:20px;animation:toastIn .15s ease}
-.bm-panel{background:#fff;border-radius:16px;width:420px;max-width:100%;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(15,39,64,.3);overflow:hidden}
-.bm-head{display:flex;align-items:center;gap:9px;padding:14px 16px;border-bottom:1px solid var(--border);font-size:14px;font-weight:700;color:var(--navy)}
-.bm-head svg{color:#D97706}
-.bm-head span{flex:1}
-.bm-body{padding:8px;overflow-y:auto}
-.bm-empty{padding:26px 18px;text-align:center;color:var(--muted);font-size:12.5px;line-height:1.65}
-.bm-item{display:flex;align-items:flex-start;gap:10px;padding:11px 12px;border-radius:10px}
-.bm-item:hover{background:#f7f9fc}
-.bm-flag{color:#D97706;margin-top:1px;flex-shrink:0;display:inline-flex}
+.bm-panel{background:var(--glass);border-radius:18px;width:460px;max-width:100%;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(15,39,64,.3);overflow:hidden}
+.bm-head{display:flex;align-items:center;gap:9px;padding:16px 18px;border-bottom:1px solid var(--border);font-size:14.5px;font-weight:700;color:var(--navy)}
+.bm-head-icon{color:#D97706;display:inline-flex}
+.bm-count-chip{font-size:11px;font-weight:700;color:#D97706;background:#FEF3C7;border-radius:999px;padding:2px 9px}
+.bm-body{padding:12px;overflow-y:auto;flex:1}
+.bm-empty{padding:36px 18px;text-align:center;color:var(--muted);font-size:12.5px;line-height:1.65}
+.bm-empty-icon{display:flex;justify-content:center;margin-bottom:12px;color:#CBD5E1}
+.bm-item{background:var(--glass);border:1px solid var(--border);margin-bottom:8px;border-radius:13px;overflow:hidden;transition:border-color .15s,box-shadow .15s}
+.bm-item:hover{border-color:#FBBF24;box-shadow:0 4px 14px rgba(217,119,6,.08)}
+.bm-item-top{display:flex;align-items:center;gap:11px;padding:12px 13px;cursor:pointer}
+.bm-icon-badge{flex-shrink:0;width:32px;height:32px;border-radius:9px;background:#FFF7E6;display:inline-flex;align-items:center;justify-content:center}
 .bm-main{flex:1;min-width:0}
 .bm-label{font-size:13px;font-weight:600;color:var(--navy);line-height:1.45}
-.bm-sub{font-size:11.5px;color:var(--muted2);margin-top:3px;line-height:1.5}
-.bm-detail{font-size:12px;color:var(--muted2);margin-top:6px;line-height:1.55;white-space:pre-wrap;max-height:150px;overflow:auto}
-body.theme-dark .bm-detail{color:#A8BBD6}
-.bm-item{display:block;padding:0;overflow:hidden}
-.bm-item-top{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer}
-.bm-item-top:hover{background:rgba(29,111,232,.035)}
-.bm-go{border:1px solid var(--border);background:#fff;border-radius:8px;width:30px;height:28px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:#1D6FE8;flex-shrink:0}
-.bm-go:hover{background:#eaf2fe}
+.bm-sub{font-size:11.5px;color:var(--muted2);margin-top:2px;line-height:1.5}
+.bm-go{border:1px solid var(--border);background:var(--glass);border-radius:8px;width:30px;height:28px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:#1D6FE8;flex-shrink:0;transition:background .15s}
+.bm-go:hover{background:#EFF6FF}
 .bm-chev{display:inline-flex;flex-shrink:0;align-items:center}
-.bm-item .bm-detail{margin:0;padding:12px 14px 14px;border-top:1px solid var(--border);max-height:300px;overflow:auto}
-.bm-flash{animation:bmflash 1.5s ease}
-@keyframes bmflash{0%,100%{box-shadow:0 0 0 0 rgba(29,111,232,0)}30%{box-shadow:0 0 0 3px rgba(29,111,232,.4)}}
+.bm-x{border:none;background:none;cursor:pointer;padding:2px;flex-shrink:0;display:inline-flex}
+.bm-detail{font-size:12px;color:var(--muted2);padding:0 13px 13px 56px;line-height:1.6;white-space:pre-wrap;max-height:160px;overflow:auto}
+body.theme-dark .bm-panel{background:#161F33}
+body.theme-dark .bm-head{color:#EAF1FB;border-color:#28364E}
+body.theme-dark .bm-item{background:#141D2F;border-color:#28364E}
+body.theme-dark .bm-item:hover{border-color:#92651F}
+body.theme-dark .bm-icon-badge{background:#241E10}
+body.theme-dark .bm-label{color:#EAF1FB}
 body.theme-dark .bm-go{background:#1B2536;border-color:#2F4368;color:#7FB0FF}
 body.theme-dark .bm-go:hover{background:#22304a}
-body.theme-dark .bm-item-top:hover{background:rgba(127,176,255,.06)}
-body.theme-dark .bm-item .bm-detail{border-color:#28364E}
+body.theme-dark .bm-detail{color:#A8BBD6}
+.nav-bm-btn{position:relative;border:1px solid var(--border);background:var(--glass);border-radius:10px;width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:#D97706;transition:background .15s,border-color .15s}
+.nav-bm-btn:hover{background:#FFFBEB;border-color:#FBBF24}
+.nav-bm-badge{position:absolute;top:-5px;right:-5px;background:#D97706;color:#fff;font-size:10px;font-weight:700;border-radius:999px;min-width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;padding:0 3px;border:2px solid var(--glass)}
+body.theme-dark .nav-bm-btn{background:#161F33;border-color:#2F4368;color:#FBBF24}
+body.theme-dark .nav-bm-btn:hover{background:#241E10}
+.bm-flash{animation:bmflash 1.5s ease}
+@keyframes bmflash{0%,100%{box-shadow:0 0 0 0 rgba(29,111,232,0)}30%{box-shadow:0 0 0 3px rgba(29,111,232,.4)}}
 [id^="sec-"],.phase-sec,.tls-card{scroll-margin-top:74px}
 .mode-card{animation:mpfadeup .34s ease}
 @keyframes mpfadeup{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
@@ -6225,11 +6480,6 @@ body.theme-dark .mt-chip{background:#141E2C;border-color:#2A3A52}
 body.theme-dark .mt-chip.on{background:rgba(29,111,232,0.18)}
 body.theme-dark .takeaway-txt,body.theme-dark .clin-txt,body.theme-dark .lead,body.theme-dark .desc{color:#D6E2F2}
 .sidebar-item.active svg{opacity:1}
-.bm-x{border:none;background:none;cursor:pointer;padding:2px;flex-shrink:0}
-body.theme-dark .bm-panel{background:#161F33}
-body.theme-dark .bm-head{color:#EAF1FB;border-color:#28364E}
-body.theme-dark .bm-item:hover{background:#1B2536}
-body.theme-dark .bm-label{color:#EAF1FB}
 .sh-ov{position:fixed;inset:0;z-index:140;background:rgba(15,39,64,.45);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:20px;animation:toastIn .15s ease}
 .sh-panel{background:#fff;border-radius:16px;width:432px;max-width:100%;box-shadow:0 24px 60px rgba(15,39,64,.3);overflow:hidden}
 .sh-head{display:flex;align-items:center;gap:9px;padding:14px 16px;border-bottom:1px solid var(--border);font-size:14px;font-weight:700;color:var(--navy)}
@@ -6322,6 +6572,16 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .hist-dx{font-size:12px;color:#475569;line-height:1.5;margin:3px 0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .hist-foot{display:flex;align-items:center;gap:5px;font-size:11px;color:#94a3b8}
 .hist-open{font-size:12px;font-weight:600;color:#1D6FE8;flex-shrink:0}
+.hist-section-lbl{display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#DC2626;margin:10px 2px 2px}
+.hist-item-ecg:hover{border-color:#DC2626;background:rgba(220,38,38,.03);box-shadow:0 6px 18px rgba(220,38,38,.1)}
+.hist-item-ecg-demo{border-style:dashed}
+.hist-demo-tag{display:inline-block;font-size:9.5px;font-weight:700;color:#94A3B8;background:#F1F5F9;border-radius:999px;padding:1px 7px;margin-left:6px;vertical-align:middle;text-transform:uppercase;letter-spacing:.03em}
+body.theme-dark .hist-demo-tag{color:#64748B;background:#141E2C}
+.hist-avatar-ecg{background:linear-gradient(135deg,#FEE2E2,#FED7AA)}
+body.theme-dark .hist-section-lbl{color:#F87171}
+body.theme-dark .hist-item{border-color:#28364E}
+body.theme-dark .hist-name{color:#EAF1FB}
+body.theme-dark .hist-dx{color:#9FB3CC}
 .hist-link{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:#1D6FE8;background:none;border:none;cursor:pointer;margin-top:10px;padding:6px 8px;border-radius:8px}
 .hist-link:hover{background:rgba(29,111,232,.08)}
 @media(max-width:560px){.mode-hero{flex-direction:column}.mdt-step,.mdt-khoa,.mdt-list,.mdt-ket,.teach-sec,.teach-soc,.teach-submode{margin-left:16px;margin-right:16px}.mode-hero{padding:20px 16px}}
@@ -6533,15 +6793,6 @@ body.theme-dark .mode-cd-item.sel{background:#15233b}
 .mdt-step .mdt-step-chev{margin-left:6px}
 .teach-sec-t .teach-sec-chev{margin-left:6px}
 .teach-sec-t .sec-tools .copy-btn,.teach-sec-t .sec-tools .flag-btn,.mdt-step .sec-tools .copy-btn,.mdt-step .sec-tools .flag-btn{padding:3px}
-.bm-ov{background:var(--page-bg);align-items:flex-start;justify-content:center;padding:0;overflow-y:auto}
-.bm-panel{background:transparent;width:100%;max-width:780px;min-height:100vh;max-height:none;border-radius:0;box-shadow:none;padding:0 20px 48px}
-.bm-head{position:sticky;top:0;background:var(--page-bg);font-size:17px;padding:22px 2px 14px;z-index:1}
-.bm-body{padding:16px 0}
-.bm-item{background:var(--glass);border:1px solid var(--border);margin-bottom:8px;border-radius:12px}
-.bm-empty{margin-top:34px}
-body.theme-dark .bm-panel{background:transparent}
-body.theme-dark .bm-head{background:var(--page-bg)}
-body.theme-dark .bm-item{background:#141D2F;border-color:#28364E}
 .teach-sec-t{display:flex;align-items:center;gap:8px}
 .teach-sec-chev{margin-left:auto;display:inline-flex;align-items:center}
 body.theme-dark .psnap{background:rgba(12,20,34,0.96);border-color:#28364E}
@@ -6876,6 +7127,7 @@ export default function App() {
   const [chatMessages, setChatMessages] = useState([])
   const [showHistory, setShowHistory] = useState(false)
   const [showEcg, setShowEcg] = useState(false)
+  const [ecgInitial, setEcgInitial] = useState(null)
   const [currentId, setCurrentId] = useState(null)
 
   useEffect(() => {
@@ -6999,8 +7251,8 @@ export default function App() {
             chatMessages={chatMessages} setChatMessages={setChatMessages}
             onOpenHistory={()=>setShowHistory(true)} onLogout={logout}/>
         )}
-        {showHistory && <HistoryPanel onClose={()=>setShowHistory(false)} onOpen={loadRecord} currentId={currentId}/>}
-        {showEcg && <EcgPanel onClose={()=>setShowEcg(false)}/>}
+        {showHistory && <HistoryPanel onClose={()=>setShowHistory(false)} onOpen={loadRecord} onOpenEcgEntry={(entry)=>{setEcgInitial(entry);setShowHistory(false);setShowEcg(true)}} currentId={currentId}/>}
+        {showEcg && <EcgPanel onClose={()=>{setShowEcg(false);setEcgInitial(null)}} initialResult={ecgInitial}/>}
         <ToastHost/>
         <ConfirmHost/>
         <ShortcutHelp/>

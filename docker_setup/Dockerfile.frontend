@@ -23,5 +23,9 @@ FROM nginx:alpine
 
 COPY --from=build /app/bundle.js /usr/share/nginx/html/mount.js
 COPY docker_setup/index.html /usr/share/nginx/html/index.html
+# logos/ là thư mục tùy chọn (app vẫn chạy nếu thiếu, chỉ ẩn logo) -- nếu
+# không có thư mục này khi build, COPY sẽ lỗi, nên kiểm tra trước ở CI/script
+# build thay vì COPY trực tiếp một thư mục có thể không tồn tại.
+COPY logos/ /usr/share/nginx/html/logos/
 
 EXPOSE 80

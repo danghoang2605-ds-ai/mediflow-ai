@@ -6,6 +6,7 @@ import os
 import json
 import re
 import tempfile
+import base64
 # Nạp biến môi trường từ file .env nếu có (an toàn nếu chưa cài python-dotenv)
 try:
     from dotenv import load_dotenv
@@ -23,6 +24,7 @@ import anthropic
 import clinical_rules
 import ecg_engine
 import document_extract
+from cde.engine import evaluate_v2
 
 app = FastAPI(title="MediFlow AI", version="1.0.0")
 
@@ -333,6 +335,41 @@ def call_claude(system: str, user_message: str, max_tokens: int = 4000,
     return response.content[0].text
 
 
+def call_claude_with_image(system: str, user_text: str, image_b64: str,
+                             media_type: str, max_tokens: int = 16000) -> str:
+    """Giống call_claude() nhưng gửi kèm 1 ảnh (content block "image").
+
+    DÙNG CHO: OCR/đọc hồ sơ dạng ảnh (PNG/JPG) — giải pháp TẠM THỜI bằng Claude
+    Vision trong lúc chưa có token VNPT SmartReader từ BTC (xem vnpt_client.py
+    placeholder + roadmap: SmartVoice -> SmartReader -> SmartBot). Khi có token
+    SmartReader, hàm OCR ở endpoint /analyze nên đổi sang gọi SmartReader
+    trước, dùng Claude Vision làm fallback nếu SmartReader lỗi/không khả dụng -
+    KHÔNG xóa hàm này, chỉ đổi thứ tự ưu tiên gọi.
+
+    Không cache_control cho ảnh (cache theo ảnh ít lợi vì mỗi hồ sơ là ảnh khác
+    nhau, không lặp lại như REPORT_SYSTEM text).
+    """
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY chưa được cấu hình")
+
+    client = anthropic.Anthropic(api_key=api_key)
+
+    response = client.messages.create(
+        model="claude-haiku-4-5",
+        max_tokens=max_tokens,
+        system=system,
+        messages=[{
+            "role": "user",
+            "content": [
+                {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": image_b64}},
+                {"type": "text", "text": user_text},
+            ],
+        }],
+    )
+    return response.content[0].text
+
+
 # ─── ROUTES ─────────────────────────────────────────────────────────────────
 
 @app.get("/health")
@@ -476,6 +513,127 @@ def select_relevant_text(full_text: str, budget: int):
     return out, {"filtered": True, "pages_total": n, "pages_kept": len(kept)}
 
 
+MAX_IMAGE_BYTES = 8 * 1024 * 1024  # 8MB - giới hạn an toàn cho ảnh chụp/scan hồ sơ
+
+
+def run_analysis_pipeline_from_image(image_bytes: bytes, media_type: str,
+                                       filename: str = "") -> JSONResponse:
+    """
+    Bước 1 cho ẢNH (PNG/JPG): gọi Claude Vision đọc trực tiếp ảnh -> JSON có
+    cấu trúc, GỘP LUÔN bước OCR + extraction trong 1 lần gọi (khác với PDF -
+    OCR PDF scan và extraction JSON là 2 bước riêng vì pypdf không đọc được
+    ảnh trong PDF scan, còn ảnh thì Claude Vision đọc trực tiếp được).
+
+    GIẢI PHÁP TẠM THỜI (xem call_claude_with_image) — sẽ đổi sang VNPT
+    SmartReader làm OCR chính khi có token, Claude Vision giữ làm fallback.
+
+    Bước 2-3 TÁI DÙNG NGUYÊN từ run_analysis_pipeline (Disease Classifier +
+    Rule Engine + Narrative) — không viết lại, chỉ khác cách lấy "report" ở
+    Bước 1.
+    """
+    if len(image_bytes) > MAX_IMAGE_BYTES:
+        return JSONResponse({
+            "success": False,
+            "error": f"Ảnh quá lớn ({len(image_bytes)//1024//1024}MB). "
+                     f"Giới hạn {MAX_IMAGE_BYTES//1024//1024}MB — hãy chụp/scan với độ phân giải thấp hơn.",
+        }, status_code=413)
+
+    image_b64 = base64.b64encode(image_bytes).decode("ascii")
+    raw = ""
+    try:
+        # ─── BƯỚC 1 (LLM Extraction từ ẢNH): Claude Vision đọc -> JSON thuần ──
+        raw = call_claude_with_image(
+            system=REPORT_SYSTEM,
+            user_text="Đây là ảnh chụp/scan hồ sơ bệnh án. Hãy đọc và trích "
+                      "xuất đúng theo format JSON đã quy định. Nếu chữ viết "
+                      "tay khó đọc ở vài chỗ, ưu tiên để trống/null cho phần "
+                      "đó hơn là đoán bừa — KHÔNG suy luận số liệu không đọc rõ.",
+            image_b64=image_b64,
+            media_type=media_type,
+        )
+
+        json_text = raw.strip()
+        if "```json" in json_text:
+            json_text = json_text.split("```json")[1].split("```")[0]
+        elif "```" in json_text:
+            json_text = json_text.split("```")[1].split("```")[0]
+        json_text = json_text.strip()
+        start, end = json_text.find("{"), json_text.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            json_text = json_text[start:end + 1]
+
+        try:
+            report = json.loads(json_text)
+        except json.JSONDecodeError:
+            return JSONResponse({
+                "success": False,
+                "error": "Không đọc được rõ nội dung ảnh để tạo JSON hồ sơ. "
+                         "Hãy thử chụp/scan rõ hơn, hoặc dùng bản PDF nếu có.",
+            }, status_code=200)
+
+        # ─── BƯỚC 2 (Python Rule Engine v2): TÁI DÙNG nguyên, không viết lại ──
+        engine = evaluate_v2(report)
+
+        # ─── BƯỚC 3 (LLM Interpretation): TÁI DÙNG nguyên ──────────────────────
+        trend_summary = ""
+        if engine["trend_facts"]:
+            try:
+                trend_summary = call_claude(
+                    system=TREND_SYSTEM,
+                    user_message="Các mốc chênh lệch chỉ số (chỉ diễn đạt, không bịa thêm):\n"
+                                 + json.dumps(engine["trend_facts"], ensure_ascii=False),
+                    max_tokens=400
+                ).strip()
+            except Exception:
+                trend_summary = ""
+
+        return JSONResponse({
+            "success": True,
+            "report": report,
+            "ho_so_text": f"[Hồ sơ đọc từ ảnh: {filename}]",  # placeholder cho chatbot
+            "analysis": {
+                "egfr": engine["egfr"],
+                "egfr_detail": engine.get("egfr_detail"),
+                "priority_findings": engine["priority_findings"],
+                "drug_safety": engine["drug_safety"],
+                "trend_summary": trend_summary,
+                "risk_scores": engine.get("risk_scores"),
+                "ttr": engine.get("ttr"),
+                "care_gaps": engine.get("care_gaps"),
+                "active_profiles": engine.get("active_profiles", []),
+                "indicators_applicable": engine.get("indicators_applicable", []),
+                "anticoagulant_status": engine.get("anticoagulant_status"),
+                "inr_target_detail": engine.get("inr_target_detail"),
+                "ttr_khong_tinh_duoc_ly_do": engine.get("ttr_khong_tinh_duoc_ly_do"),
+                "active_icd_groups": engine.get("active_icd_groups", []),
+                "vital_signs": engine.get("vital_signs"),
+                "risk_factors": engine.get("risk_factors"),
+                "baseline_labs": engine.get("baseline_labs"),
+                "score2_applicability": engine.get("score2_applicability"),
+                "antithrombotic_priority": engine.get("antithrombotic_priority"),
+            },
+            "meta": {"pages": 1, "method": "image-vision-ocr", "ocr_pages": [1],
+                     "filtered": False, "pages_total": 1, "pages_kept": 1,
+                     "canh_bao_chat_luong": "Đọc từ ảnh bằng AI (Claude Vision) — "
+                     "độ chính xác phụ thuộc chất lượng ảnh, đặc biệt chữ viết tay. "
+                     "Vui lòng đối chiếu lại với bản gốc."},
+        })
+
+    except json.JSONDecodeError:
+        return JSONResponse({
+            "success": False,
+            "error": "Không thể parse kết quả AI",
+            "raw": raw[:500],
+        }, status_code=200)
+    except HTTPException:
+        raise
+    except Exception as e:
+        return JSONResponse({
+            "success": False,
+            "error": f"Lỗi xử lý ảnh: {str(e)}",
+        }, status_code=500)
+
+
 def run_analysis_pipeline(ho_so_text: str, pages: int = 0,
                           method: str = "text", ocr_pages=None) -> JSONResponse:
     """
@@ -526,8 +684,13 @@ def run_analysis_pipeline(ho_so_text: str, pages: int = 0,
                          "Hãy thử lại, hoặc tách bớt số trang hồ sơ.",
             }, status_code=200)
 
-        # ─── BƯỚC 2 (Python Rule Engine): code thuần, KHÔNG dùng AI ──────────────
-        engine = clinical_rules.evaluate(report)
+        # ─── BƯỚC 2 (Python Rule Engine v2): code thuần, KHÔNG dùng AI ───────────
+        # Đổi từ clinical_rules.evaluate() sang cde.engine.evaluate_v2() —
+        # kiến trúc Disease Classifier → Clinical Profiles → Applicable
+        # Indicators (xem cde/SDS_Clinical_Decision_Engine_v2.md). Tương thích
+        # ngược 100% về field cũ, chỉ thêm "active_profiles". Đã test 29/29
+        # (test_main.py + cde/test_engine.py) trước khi đổi dòng này.
+        engine = evaluate_v2(report)
 
         # ─── BƯỚC 3 (LLM Interpretation): Claude diễn đạt diễn tiến từ trend_facts ─
         trend_summary = ""
@@ -555,6 +718,17 @@ def run_analysis_pipeline(ho_so_text: str, pages: int = 0,
                 "risk_scores": engine.get("risk_scores"),
                 "ttr": engine.get("ttr"),
                 "care_gaps": engine.get("care_gaps"),
+                "active_profiles": engine.get("active_profiles", []),
+                "indicators_applicable": engine.get("indicators_applicable", []),
+                "anticoagulant_status": engine.get("anticoagulant_status"),
+                "inr_target_detail": engine.get("inr_target_detail"),
+                "ttr_khong_tinh_duoc_ly_do": engine.get("ttr_khong_tinh_duoc_ly_do"),
+                "active_icd_groups": engine.get("active_icd_groups", []),
+                "vital_signs": engine.get("vital_signs"),
+                "risk_factors": engine.get("risk_factors"),
+                "baseline_labs": engine.get("baseline_labs"),
+                "score2_applicability": engine.get("score2_applicability"),
+                "antithrombotic_priority": engine.get("antithrombotic_priority"),
             },
             "meta": {"pages": pages, "method": method, "ocr_pages": ocr_pages,
                      "filtered": filter_meta.get("filtered", False),
@@ -620,12 +794,9 @@ async def analyze_record(file: UploadFile = File(...)):
 
     if ext in document_extract.UNSUPPORTED_BUT_LISTED_IN_UI:
         if ext in (".png", ".jpg", ".jpeg"):
-            raise HTTPException(
-                status_code=400,
-                detail="Ảnh chụp/scan cần OCR — tính năng này đang phát triển "
-                       "(giai đoạn 2). Hiện tại hệ thống đọc được PDF, Word "
-                       "(.docx), Excel (.xlsx) và PowerPoint (.pptx).",
-            )
+            content = await file.read()
+            media_type = "image/png" if ext == ".png" else "image/jpeg"
+            return run_analysis_pipeline_from_image(content, media_type, filename=file.filename)
         raise HTTPException(
             status_code=400,
             detail=f"Định dạng {ext} (phiên bản cũ) chưa được hỗ trợ. "

@@ -183,7 +183,15 @@ def compute_egfr(creatinine_umol: Optional[float], age: Optional[int], sex_male:
 
 # ─── CHUẨN HÓA TÊN THUỐC -> HOẠT CHẤT ─────────────────────────────────────────
 def resolve_generic(ten_thuoc: str) -> Optional[str]:
-    """Lấy hoạt chất từ tên thuốc. Ưu tiên phần trong ngoặc, fallback bảng biệt dược."""
+    """Lấy hoạt chất từ tên thuốc. Ưu tiên phần trong ngoặc, sau đó bảng biệt
+    dược, CUỐI CÙNG kiểm tra xem tên đã VIẾT TRỰC TIẾP BẰNG GENERIC chưa
+    (ví dụ "Aspirin 81mg" — generic viết thẳng, không qua brand/ngoặc).
+
+    BUG ĐÃ SỬA: trước đây thiếu bước cuối này — mọi thuốc viết tên generic
+    trực tiếp (không kèm brand, không có ngoặc) như "Aspirin 81mg" trả về
+    None, khiến TẤT CẢ rule tương tác/ưu tiên liên quan các thuốc đó (Aspirin,
+    Clopidogrel viết trực tiếp...) không hoạt động — phát hiện qua việc viết
+    test cho antithrombotic_priority.py."""
     import re
     paren = re.search(r"\(([^)]+)\)", ten_thuoc or "")
     if paren:
@@ -192,7 +200,12 @@ def resolve_generic(ten_thuoc: str) -> Optional[str]:
             if g in first or first in g:
                 return g
     brand = re.split(r"\d", ten_thuoc or "")[0].strip().lower()
-    return BRAND_TO_GENERIC.get(brand)
+    if brand in BRAND_TO_GENERIC:
+        return BRAND_TO_GENERIC[brand]
+    # Tên đã là generic, viết trực tiếp (vd "Aspirin 81mg" -> brand="aspirin")
+    if brand in GENERIC_GROUPS:
+        return brand
+    return None
 
 
 # ─── KIỂM TRA AN TOÀN ĐƠN THUỐC ───────────────────────────────────────────────
@@ -449,7 +462,10 @@ def _text_has_any(haystack_stripped: str, keywords: list) -> bool:
 # tháo đường", "chưa từng đột quỵ". Đã bỏ dấu để khớp cùng cách với keyword.
 NEGATION_PHRASES = [
     "khong ghi nhan", "khong co", "khong bi", "chua tung", "chua co",
-    "khong phat hien", "phu nhan", "loai tru",
+    "khong phat hien", "phu nhan", "loai tru", "khong phai",
+    # "khong phai" bổ sung sau khi Disease Classifier (cde/engine.py) phát
+    # hiện qua test: câu "đã sửa van. Không phải van cơ học." vẫn bị tính là
+    # CÓ van cơ học, vì cụm phủ định cũ không bắt được dạng "không phải X".
 ]
 # Khoảng cách tối đa (số ký tự) cho phép giữa cụm phủ định và từ khóa bệnh để
 # vẫn coi là phủ định "của" từ khóa đó — tránh bắt nhầm phủ định ở câu khác

@@ -254,15 +254,30 @@ def test_analyze_docx_success(client, mock_anthropic):
     assert resp.json()["success"] is True
 
 
-def test_analyze_image_not_yet_supported(client):
-    """Ảnh (.png/.jpg) chưa hỗ trợ OCR — phải trả lỗi RÕ NGHĨA, không phải
-    lỗi server chung 'Chỉ chấp nhận PDF' (bug đã phát hiện và sửa)."""
+def test_analyze_image_now_supported_via_claude_vision(client, mock_anthropic):
+    """Ảnh (.png/.jpg) GIỜ ĐÃ ĐƯỢC XỬ LÝ qua Claude Vision (giải pháp tạm thời,
+    chờ VNPT SmartReader) — không còn báo lỗi "đang phát triển" như trước.
+    Pipeline Bước 2-3 vẫn chạy bình thường qua engine v2 (mock LLM nên không
+    tốn token thật khi test)."""
     resp = client.post("/analyze", files={
-        "file": ("anh.jpg", io.BytesIO(b"fake-jpg-bytes"), "image/jpeg")
+        "file": ("anh_benh_an.jpg", io.BytesIO(b"fake-jpg-bytes-for-test"), "image/jpeg")
     })
-    assert resp.status_code == 400
-    detail = resp.json()["detail"]
-    assert "OCR" in detail or "ocr" in detail.lower()
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["success"] is True
+    assert data["meta"]["method"] == "image-vision-ocr"
+    assert "canh_bao_chat_luong" in data["meta"]
+    assert "active_profiles" in data["analysis"]
+
+
+def test_analyze_image_too_large_returns_413(client):
+    """Ảnh vượt giới hạn MAX_IMAGE_BYTES phải báo lỗi rõ nghĩa — không cần
+    mock Claude vì bị chặn trước khi gọi API."""
+    big_fake_image = b"\xff" * (9 * 1024 * 1024)  # 9MB > giới hạn 8MB
+    resp = client.post("/analyze", files={
+        "file": ("anh_qua_lon.jpg", io.BytesIO(big_fake_image), "image/jpeg")
+    })
+    assert resp.status_code == 413
 
 
 def test_analyze_corrupt_docx_returns_400_not_500(client):
