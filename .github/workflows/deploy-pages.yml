@@ -43,6 +43,10 @@ jobs:
       - name: Copy index.html vào dist/
         run: cp index.html dist/index.html
 
+      - name: Copy logos/ vào dist/
+        run: |
+          if [ -d logos ]; then cp -r logos dist/logos; fi
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
@@ -51,6 +55,4 @@ jobs:
         with:
           path: dist
 
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      -
