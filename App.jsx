@@ -142,27 +142,31 @@ const CSS = `
   .card-tool-btn:hover{background:rgba(29,111,232,0.1);color:var(--blue)}
   .card-tool-btn.has-content{background:rgba(29,111,232,0.08)}
   .card-edit-live{padding:11px 13px;border:2px dashed #BFDBFE;border-radius:10px;font-size:13px;color:var(--navy);line-height:1.6;min-height:40px;outline:none}
+  .card-edit-display-txt{font-size:13px;color:var(--navy);line-height:1.65}
   .card-edit-live:focus{border-color:#1D6FE8;box-shadow:0 0 0 3px rgba(29,111,232,.12)}
   .card-edit-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:9px}
   .card-edit-cancel{padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:#fff;color:var(--muted2);font-size:12.5px;font-weight:600;cursor:pointer}
   .card-edit-cancel:hover{background:#F1F5F9}
   .card-edit-save{padding:6px 16px;border-radius:8px;border:none;background:#1D6FE8;color:#fff;font-size:12.5px;font-weight:600;cursor:pointer}
   .card-edit-save:hover{background:#1A5FCC}
-  .wnote-panel{margin:0 18px 14px;border:1px solid #FBBF24;border-radius:12px;background:#FFFBEB;overflow:hidden}
-  .wnote-head{display:flex;align-items:center;gap:8px;padding:9px 13px;font-size:12px;font-weight:700;color:#92400E;text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid #FDE68A}
-  .wnote-close{margin-left:auto;border:none;background:transparent;cursor:pointer;display:inline-flex;padding:2px}
-  .wnote-ta{width:100%;min-height:70px;border:none;background:transparent;padding:11px 13px;font-size:13px;font-family:inherit;color:#78350F;resize:vertical;box-sizing:border-box;outline:none}
-  .wnote-ta::placeholder{color:#D6A85C}
-  .wnote-bar{display:flex;align-items:center;gap:8px;padding:7px 13px 11px}
-  .wnote-mic{display:inline-flex;align-items:center;gap:6px;border:1px solid #FBBF24;background:#fff;color:#92400E;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer}
+  .wnote-panel{margin:14px 20px 20px;border:1px solid #FDE9B8;border-radius:14px;background:linear-gradient(180deg,#FFFDF7,#FFF9EC);overflow:hidden;box-shadow:0 1px 3px rgba(217,119,6,0.06)}
+  .wnote-head{display:flex;align-items:center;gap:8px;padding:11px 16px;font-size:11.5px;font-weight:700;color:#92400E;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #FBEACB}
+  .wnote-close{margin-left:auto;border:none;background:transparent;cursor:pointer;display:inline-flex;padding:4px;border-radius:6px;color:#92400E;opacity:.6}
+  .wnote-close:hover{opacity:1;background:rgba(217,119,6,0.1)}
+  .wnote-ta{width:100%;min-height:64px;border:none;background:transparent;padding:13px 16px 8px;font-size:13.5px;line-height:1.6;font-family:inherit;color:#451A03;resize:vertical;box-sizing:border-box;outline:none}
+  .wnote-ta::placeholder{color:#C99A4E}
+  .wnote-bar{display:flex;align-items:center;gap:10px;padding:6px 16px 14px}
+  .wnote-mic{display:inline-flex;align-items:center;gap:6px;border:1px solid #FBEACB;background:#fff;color:#92400E;border-radius:999px;padding:6px 13px;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s}
+  .wnote-mic:hover{background:#FFF6E0}
   .wnote-mic.on{background:#DC2626;color:#fff;border-color:#DC2626}
   .wnote-mic:disabled{opacity:.5;cursor:not-allowed}
-  .wnote-save{border:none;background:#D97706;color:#fff;border-radius:999px;padding:5px 16px;font-size:12px;font-weight:600;cursor:pointer}
-  .wnote-save:hover{background:#B45309}
+  .wnote-save{border:none;background:linear-gradient(135deg,#D97706,#F59E0B);color:#fff;border-radius:999px;padding:6px 18px;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 2px 6px rgba(217,119,6,0.25)}
+  .wnote-save:hover{filter:brightness(1.05)}
   body.theme-dark .card-tool-btn{color:#5A6B85}
   body.theme-dark .card-tool-btn:hover{background:rgba(127,176,255,.12);color:#7FB0FF}
   body.theme-dark .card-tool-btn.has-content{background:rgba(127,176,255,.1)}
   body.theme-dark .card-edit-live{background:#141E2C;border-color:#2A3A52;color:#EAF1FB}
+  body.theme-dark .card-edit-display-txt{color:#EAF1FB}
   body.theme-dark .card-edit-cancel{background:#1B2536;border-color:#2F4368;color:#9FB3CC}
   body.theme-dark .wnote-panel{background:#241E10;border-color:#5c4a1a}
   body.theme-dark .wnote-head{color:#FCD34D;border-bottom-color:#5c4a1a}
@@ -3585,7 +3589,7 @@ function useWidgetTools(widgetId, pkey) {
   const [editing, setEditing] = useState(false)
   const [editText, setEditText] = useState(() => noteGet(key, widgetId + "_edit"))
   const savedEdit = noteGet(key, widgetId + "_edit")
-  const startEdit = () => { setEditText(noteGet(key, widgetId + "_edit")); setEditing(true) }
+  const startEdit = () => setEditing(true)
   const saveEdit = () => { noteSet(key, widgetId + "_edit", editText); setEditing(false); mpToast(editText.trim() ? "Đã lưu chỉnh sửa" : "Đã xóa nội dung chỉnh sửa") }
   const cancelEdit = () => setEditing(false)
 
@@ -3663,25 +3667,26 @@ function WidgetNotePanel({ tools }) {
 }
 
 // ─── Nội dung widget có thể CHỈNH SỬA TRỰC TIẾP (khác Ghi chú — đây là sửa
-// ngay nội dung hiển thị, không phải 1 mục riêng). Khi bác sĩ bật "Chỉnh
-// sửa", nội dung gốc (children) được snapshot thành HTML tĩnh, đưa vào 1
-// vùng contentEditable. Sau khi Lưu, bản đã sửa THAY THẾ nội dung gốc khi
-// hiển thị bình thường (không hiện song song cả 2, tránh rối) — nhưng nội
-// dung gốc do rule engine tính vẫn giữ nguyên trong dữ liệu, bác sĩ chỉ sửa
-// PHẦN HIỂN THỊ cho riêng phiên xem của mình (lưu sessionStorage).
+// ngay nội dung hiển thị, không phải 1 mục riêng). KHÁC bản cũ (đã sửa lại
+// theo phản hồi thực tế): KHÔNG còn snapshot text rồi nhồi vào 1 div rỗng
+// riêng (cách đó làm mất hết cấu trúc bảng/chip/nhiều dòng, nhìn như "xóa
+// hết viết lại" dù chữ vẫn còn — đúng vấn đề Đăng quan sát). Giờ làm chính
+// div bọc NỘI DUNG GỐC (children, giữ đúng JSX/layout) trở thành
+// contentEditable khi đang sửa — bác sĩ chỉ click đúng chữ cần đổi, gõ chèn/
+// xóa tại đó, phần còn lại (bảng, chip, icon...) giữ y nguyên không động.
+//
+// Lưu trữ: vì giờ sửa tại chỗ trên cấu trúc gốc, bản đã lưu là SNAPSHOT HTML
+// (không phải text thuần) — khi hiển thị lại (không ở chế độ sửa), dùng
+// dangerouslySetInnerHTML để giữ đúng định dạng đã sửa.
 function WidgetEditableBody({ tools, bodyRef, children }) {
-  const editRef = useRef(null)
-  useEffect(() => {
-    if (tools.editing && editRef.current && bodyRef.current) {
-      editRef.current.innerHTML = tools.savedEdit || bodyRef.current.innerHTML
-    }
-  }, [tools.editing])
+  const liveRef = useRef(null)
 
   if (tools.editing) {
     return (
       <div>
-        <div ref={editRef} className="card-edit-live" contentEditable suppressContentEditableWarning
-          onInput={e => tools.setEditText(e.currentTarget.innerHTML)}/>
+        <div ref={el => { liveRef.current = el; bodyRef.current = el }} className="card-edit-live" contentEditable suppressContentEditableWarning
+          onInput={e => tools.setEditText(e.currentTarget.innerHTML)}
+          dangerouslySetInnerHTML={{ __html: tools.savedEdit || (bodyRef.current ? bodyRef.current.innerHTML : "") }}/>
         <div className="card-edit-actions">
           <button className="card-edit-cancel" onClick={tools.cancelEdit}>Hủy</button>
           <button className="card-edit-save" onClick={tools.saveEdit}>Lưu</button>
@@ -6109,12 +6114,13 @@ function EcgReadingForm({ result, dd }) {
   )
 }
 
-function EcgPanel({ onClose, initialResult }) {
+function EcgPage({ onBack, initialResult, onLogout }) {
   const [staged, setStaged] = useState(initialResult ? { url: initialResult.result.image_base64 || initialResult.result.image_preview_url || null, name: initialResult.ten_file } : null)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(initialResult ? initialResult.result : null)       // response từ /ecg (hoặc demo tĩnh, hoặc lịch sử cũ)
   const [error, setError] = useState(null)
   const [isDemo, setIsDemo] = useState(!!(initialResult && initialResult.is_demo))
+  const [menuOpen, setMenuOpen] = useState(false)
   const inputRef = useRef()
 
   const reset = () => { setStaged(null); setResult(null); setError(null); setIsDemo(false) }
@@ -6177,13 +6183,39 @@ function EcgPanel({ onClose, initialResult }) {
   }
 
   return (
-    <div className="ecg-overlay" onClick={onClose}>
-      <div className="ecg-modal" onClick={e => e.stopPropagation()}>
-        <div className="hist-head">
-          <span className="hist-title"><Icon.Pulse d={17} color="#1D6FE8"/>Quét điện tâm đồ (ECG)</span>
-          <button className="fp-close" onClick={onClose} title="Đóng"><Icon.Close d={15} color="#475569"/></button>
+    <div className="ecg-page">
+      <header className="report-nav">
+        <div className="report-nav-inner">
+          <div className="nav-row1">
+            <div className="nav-left">
+              <button className="ecg-back" onClick={onBack} title="Quay lại"><Icon.Back d={16} color="#1D6FE8"/></button>
+              <div className="logo">
+                <BrandMark size={30} radius={9}/>
+                <span className="logo-text" style={{fontSize:14}}>Med<em>Parcours</em></span>
+                <span className="logo-sub" style={{fontSize:12}}>AI</span>
+              </div>
+            </div>
+            <div className="nav-right">
+              <div className="nav-menu-wrap">
+                <button className="nav-burger" onClick={()=>setMenuOpen(o=>!o)} title="Menu" aria-label="Menu">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#334155" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                </button>
+                {menuOpen && <>
+                  <div className="nav-menu-ov" onClick={()=>setMenuOpen(false)}/>
+                  <div className="nav-menu">
+                    <button onClick={()=>{setMenuOpen(false);onLogout()}}><Icon.Close d={14} color="#475569"/>Đăng xuất</button>
+                  </div>
+                </>}
+              </div>
+            </div>
+          </div>
+          <div className="nav-row2">
+            <span className="ecg-page-title"><Icon.Pulse d={16} color="#DC2626"/>Quét điện tâm đồ (ECG)</span>
+          </div>
         </div>
+      </header>
 
+      <div className="ecg-page-body">
         <div className="ecg-disclaimer">
           <Icon.Alert d={13} color="#D97706"/>
           Công cụ trực quan hóa hỗ trợ — số hóa lại ảnh ECG và ước tính nhịp tim. KHÔNG tự chẩn đoán (không gán "rung nhĩ", "block nhĩ thất"...). Mọi kết quả cần bác sĩ xác nhận.
@@ -6194,10 +6226,11 @@ function EcgPanel({ onClose, initialResult }) {
 
         {!staged && (
           <>
-            <div className="ecg-dropzone" onClick={() => inputRef.current.click()}>
-              <Icon.Upload d={26} color="#1D6FE8"/>
+            <div className="ecg-dropzone-page" onClick={() => inputRef.current.click()}>
+              <Icon.Upload d={32} color="#1D6FE8"/>
               <p className="upload-title">Chọn ảnh điện tâm đồ</p>
               <p className="upload-sub">Ảnh chụp/scan, định dạng PNG hoặc JPG</p>
+              <button className="btn-primary btn-primary-ecg" onClick={e=>{e.stopPropagation();inputRef.current.click()}}><Icon.Upload d={15} color="white"/>Chọn ảnh</button>
             </div>
             <div className="ecg-demo-row">
               <span className="ecg-demo-lbl">Hoặc xem demo với ảnh mẫu thật:</span>
@@ -7094,12 +7127,16 @@ body.theme-dark .risk-row-name{color:#D6E2F2}
 body.theme-dark .risk-row-note{color:#7689A8}
 body.theme-dark .fmt-chip-soon{color:#64748B;background:#141E2C;border-color:#2A3A52}
 
-/* ── EcgPanel: quét điện tâm đồ ──────────────────────────────────────────── */
-.ecg-overlay{position:fixed;inset:0;background:rgba(10,22,40,.55);display:flex;align-items:center;justify-content:center;z-index:200;padding:20px}
-.ecg-modal{background:var(--glass);border-radius:20px;max-width:980px;width:100%;max-height:88vh;overflow-y:auto;padding:22px 26px;box-shadow:0 30px 70px rgba(0,0,0,.35)}
+/* ── EcgPage: quét điện tâm đồ - TRANG RIÊNG HOÀN TOÀN ───────────────────── */
+.ecg-page{min-height:100vh;background:var(--page-bg)}
+.ecg-back{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:9px;border:1px solid var(--border);background:var(--glass);color:#1D6FE8;cursor:pointer;flex-shrink:0}
+.ecg-back:hover{background:#EFF6FF}
+.ecg-page-title{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;color:var(--navy)}
+.ecg-page-body{max-width:1180px;margin:0 auto;padding:24px 28px 60px}
+.ecg-dropzone-page{border:2px dashed #BFD3EE;border-radius:20px;padding:60px 24px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s;max-width:560px;margin:32px auto 0}
+.ecg-dropzone-page:hover{border-color:#1D6FE8;background:rgba(29,111,232,.04)}
+.ecg-dropzone-page .btn-primary{margin-top:14px}
 .ecg-disclaimer{display:flex;gap:9px;align-items:flex-start;background:#FFFBEB;border:1px solid #FDE68A;border-radius:11px;padding:11px 14px;font-size:12.5px;color:#92400e;line-height:1.55;margin-bottom:16px}
-.ecg-dropzone{border:2px dashed #BFD3EE;border-radius:16px;padding:40px 20px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s}
-.ecg-dropzone:hover{border-color:#1D6FE8;background:rgba(29,111,232,.04)}
 .ecg-demo-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px;justify-content:center}
 .ecg-demo-lbl{font-size:12px;color:#7689A8}
 .ecg-demo-btn{font-size:12px;font-weight:600;color:#1D6FE8;background:#EFF6FF;border:1px solid #BFD3EE;border-radius:999px;padding:6px 13px;cursor:pointer;transition:background .15s}
@@ -7131,10 +7168,13 @@ body.theme-dark .fmt-chip-soon{color:#64748B;background:#141E2C;border-color:#2A
 .ecg-form-source{font-size:11.5px;color:var(--muted);margin-top:3px}
 .ecg-form-tag{display:inline-block;font-size:11px;font-weight:600;color:#1D6FE8;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:999px;padding:2px 10px;margin-top:6px}
 @media(max-width:760px){.ecg-form-row{flex-direction:column;gap:5px}.ecg-form-row-hd{flex:none}}
-body.theme-dark .ecg-modal{background:#0F1A2C}
+body.theme-dark .ecg-page{background:var(--page-bg)}
+body.theme-dark .ecg-back{background:#161F33;border-color:#2A3A52;color:#5FA8FF}
+body.theme-dark .ecg-back:hover{background:#1C2940}
+body.theme-dark .ecg-page-title{color:#EAF1FB}
 body.theme-dark .ecg-disclaimer{background:#2a2010;border-color:#5c4a1a;color:#fcd34d}
-body.theme-dark .ecg-dropzone{border-color:#2A3A52}
-body.theme-dark .ecg-dropzone:hover{background:rgba(29,111,232,.08)}
+body.theme-dark .ecg-dropzone-page{border-color:#2A3A52}
+body.theme-dark .ecg-dropzone-page:hover{background:rgba(29,111,232,.08)}
 body.theme-dark .ecg-demo-lbl{color:#7689A8}
 body.theme-dark .ecg-demo-btn{background:#16243A;border-color:#2A3A52;color:#5FA8FF}
 body.theme-dark .ecg-demo-btn:hover{background:#1C2E48}
@@ -7304,7 +7344,6 @@ export default function App() {
   const [uploadError, setUploadError] = useState(null)
   const [chatMessages, setChatMessages] = useState([])
   const [showHistory, setShowHistory] = useState(false)
-  const [showEcg, setShowEcg] = useState(false)
   const [ecgInitial, setEcgInitial] = useState(null)
   const [currentId, setCurrentId] = useState(null)
 
@@ -7422,15 +7461,17 @@ export default function App() {
       <style>{CSS}</style>
       <style>{EXTRA_CSS}</style>
       <ErrorBoundary>
-        {state === "upload" && <UploadPage onUpload={handleUpload} isLoading={loading} loadingMsg={loadingMsg} error={uploadError} onDismissError={()=>setUploadError(null)} onRetry={()=>lastFile && handleUpload(lastFile)} onOpenHistory={()=>setShowHistory(true)} onOpenEcg={()=>setShowEcg(true)} onLogout={logout}/>}
+        {state === "upload" && <UploadPage onUpload={handleUpload} isLoading={loading} loadingMsg={loadingMsg} error={uploadError} onDismissError={()=>setUploadError(null)} onRetry={()=>lastFile && handleUpload(lastFile)} onOpenHistory={()=>setShowHistory(true)} onOpenEcg={()=>setState("ecg")} onLogout={logout}/>}
         {state === "report" && report && (
           <ReportPage report={report} hoSoText={hoSoText} analysis={analysis}
             onReset={()=>{setState("upload");setReport(null);setAnalysis(null);setChatMessages([]);setCurrentId(null)}}
             chatMessages={chatMessages} setChatMessages={setChatMessages}
             onOpenHistory={()=>setShowHistory(true)} onLogout={logout}/>
         )}
-        {showHistory && <HistoryPanel onClose={()=>setShowHistory(false)} onOpen={loadRecord} onOpenEcgEntry={(entry)=>{setEcgInitial(entry);setShowHistory(false);setShowEcg(true)}} currentId={currentId}/>}
-        {showEcg && <EcgPanel onClose={()=>{setShowEcg(false);setEcgInitial(null)}} initialResult={ecgInitial}/>}
+        {state === "ecg" && (
+          <EcgPage onBack={()=>{setState("upload");setEcgInitial(null)}} initialResult={ecgInitial} onLogout={logout}/>
+        )}
+        {showHistory && <HistoryPanel onClose={()=>setShowHistory(false)} onOpen={loadRecord} onOpenEcgEntry={(entry)=>{setEcgInitial(entry);setShowHistory(false);setState("ecg")}} currentId={currentId}/>}
         <ToastHost/>
         <ConfirmHost/>
         <ShortcutHelp/>
