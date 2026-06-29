@@ -149,29 +149,31 @@ const CSS = `
   .card-edit-cancel:hover{background:#F1F5F9}
   .card-edit-save{padding:6px 16px;border-radius:8px;border:none;background:#1D6FE8;color:#fff;font-size:12.5px;font-weight:600;cursor:pointer}
   .card-edit-save:hover{background:#1A5FCC}
-  .wnote-panel{margin:14px 20px 20px;border:1px solid #FDE9B8;border-radius:14px;background:linear-gradient(180deg,#FFFDF7,#FFF9EC);overflow:hidden;box-shadow:0 1px 3px rgba(217,119,6,0.06)}
-  .wnote-head{display:flex;align-items:center;gap:8px;padding:11px 16px;font-size:11.5px;font-weight:700;color:#92400E;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #FBEACB}
-  .wnote-close{margin-left:auto;border:none;background:transparent;cursor:pointer;display:inline-flex;padding:4px;border-radius:6px;color:#92400E;opacity:.6}
+  .wnote-panel{margin:0 18px 16px;border-left:3px solid #F2B341;border-radius:0 10px 10px 0;background:#FFFCF5;overflow:hidden}
+  .wnote-head{display:flex;align-items:center;gap:7px;padding:9px 14px 7px;font-size:11px;font-weight:700;color:#A66A1E;text-transform:uppercase;letter-spacing:.03em}
+  .wnote-head svg{flex-shrink:0}
+  .wnote-close{margin-left:auto;border:none;background:transparent;cursor:pointer;display:inline-flex;padding:3px;border-radius:6px;color:#A66A1E;opacity:.55}
   .wnote-close:hover{opacity:1;background:rgba(217,119,6,0.1)}
-  .wnote-ta{width:100%;min-height:64px;border:none;background:transparent;padding:13px 16px 8px;font-size:13.5px;line-height:1.6;font-family:inherit;color:#451A03;resize:vertical;box-sizing:border-box;outline:none}
-  .wnote-ta::placeholder{color:#C99A4E}
-  .wnote-bar{display:flex;align-items:center;gap:10px;padding:6px 16px 14px}
-  .wnote-mic{display:inline-flex;align-items:center;gap:6px;border:1px solid #FBEACB;background:#fff;color:#92400E;border-radius:999px;padding:6px 13px;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s}
-  .wnote-mic:hover{background:#FFF6E0}
-  .wnote-mic.on{background:#DC2626;color:#fff;border-color:#DC2626}
+  .wnote-ta{width:100%;min-height:52px;border:none;background:transparent;padding:0 14px 8px;font-size:13.5px;line-height:1.6;font-family:inherit;color:#54370F;resize:vertical;box-sizing:border-box;outline:none}
+  .wnote-ta::placeholder{color:#C9A968}
+  .wnote-bar{display:flex;align-items:center;gap:8px;padding:0 14px 10px}
+  .wnote-mic{display:inline-flex;align-items:center;gap:5px;border:none;background:rgba(217,119,6,0.1);color:#A66A1E;border-radius:999px;padding:5px 11px;font-size:11.5px;font-weight:600;cursor:pointer;transition:background .15s}
+  .wnote-mic:hover{background:rgba(217,119,6,0.18)}
+  .wnote-mic.on{background:#DC2626;color:#fff}
   .wnote-mic:disabled{opacity:.5;cursor:not-allowed}
-  .wnote-save{border:none;background:linear-gradient(135deg,#D97706,#F59E0B);color:#fff;border-radius:999px;padding:6px 18px;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 2px 6px rgba(217,119,6,0.25)}
-  .wnote-save:hover{filter:brightness(1.05)}
+  .wnote-save{border:none;background:#D97706;color:#fff;border-radius:999px;padding:5px 16px;font-size:11.5px;font-weight:600;cursor:pointer}
+  .wnote-save:hover{background:#B45309}
   body.theme-dark .card-tool-btn{color:#5A6B85}
   body.theme-dark .card-tool-btn:hover{background:rgba(127,176,255,.12);color:#7FB0FF}
   body.theme-dark .card-tool-btn.has-content{background:rgba(127,176,255,.1)}
   body.theme-dark .card-edit-live{background:#141E2C;border-color:#2A3A52;color:#EAF1FB}
   body.theme-dark .card-edit-display-txt{color:#EAF1FB}
   body.theme-dark .card-edit-cancel{background:#1B2536;border-color:#2F4368;color:#9FB3CC}
-  body.theme-dark .wnote-panel{background:#241E10;border-color:#5c4a1a}
-  body.theme-dark .wnote-head{color:#FCD34D;border-bottom-color:#5c4a1a}
-  body.theme-dark .wnote-ta{color:#FCD34D}
-  body.theme-dark .wnote-mic{background:#1B1408;border-color:#5c4a1a;color:#FCD34D}
+  body.theme-dark .wnote-panel{background:#211B0E;border-left-color:#946A24}
+  body.theme-dark .wnote-head{color:#E0B25C}
+  body.theme-dark .wnote-close{color:#E0B25C}
+  body.theme-dark .wnote-ta{color:#F0D9A8}
+  body.theme-dark .wnote-mic{background:rgba(224,178,92,0.12);color:#E0B25C}
 
   .badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:4px 10px;border-radius:8px;border:1px solid;white-space:nowrap}
   .badge-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
@@ -1868,9 +1870,9 @@ function useSpeechToText(onTranscript) {
     }
     ref.current = r
     wantRef.current = true
-    try { r.start(); setRec(true) } catch { setErr("Không khởi động được ghi âm. Hãy thử lại sau giây lát."); wantRef.current = false }
+    try { r.start(); setRec(true); mpToast("Đã bật ghi âm — đang nghe...") } catch { setErr("Không khởi động được ghi âm. Hãy thử lại sau giây lát."); wantRef.current = false }
   }
-  const stop = () => { wantRef.current = false; try { ref.current && ref.current.stop() } catch {} setRec(false) }
+  const stop = () => { wantRef.current = false; try { ref.current && ref.current.stop() } catch {} setRec(false); mpToast("Đã tắt ghi âm") }
   return { supported, rec, err, start, stop, clearErr: () => setErr("") }
 }
 function reportToText(r){
@@ -3587,10 +3589,24 @@ function noteSet(pkey, widgetId, text){
 function useWidgetTools(widgetId, pkey) {
   const key = pkey || CURRENT_PKEY
   const [editing, setEditing] = useState(false)
-  const [editText, setEditText] = useState(() => noteGet(key, widgetId + "_edit"))
+  const [editInitialHTML, setEditInitialHTML] = useState("")
   const savedEdit = noteGet(key, widgetId + "_edit")
-  const startEdit = () => setEditing(true)
-  const saveEdit = () => { noteSet(key, widgetId + "_edit", editText); setEditing(false); mpToast(editText.trim() ? "Đã lưu chỉnh sửa" : "Đã xóa nội dung chỉnh sửa") }
+  const bodyElRef = useRef(null) // trỏ tới nội dung GỐC (chưa vào edit), set bởi WidgetEditableBody qua bodyRef
+  const liveElRef = useRef(null) // trỏ tới vùng contentEditable đang gõ, set bởi WidgetEditableBody qua _liveRef
+  const startEdit = () => {
+    // Snapshot HTML đúng 1 LẦN tại thời điểm bấm — sau đó KHÔNG đụng lại
+    // state này nữa trong lúc gõ (đây chính là điểm sửa bug nhảy con trỏ).
+    setEditInitialHTML(savedEdit || (bodyElRef.current ? bodyElRef.current.innerHTML : ""))
+    setEditing(true)
+  }
+  const saveEdit = () => {
+    // Đọc trực tiếp DOM thật (trình duyệt tự quản lý trong lúc gõ), KHÔNG
+    // qua state — tránh vòng lặp setState -> re-render -> ghi đè DOM.
+    const html = liveElRef.current ? liveElRef.current.innerHTML : ""
+    noteSet(key, widgetId + "_edit", html)
+    setEditing(false)
+    mpToast(html.trim() ? "Đã lưu chỉnh sửa" : "Đã xóa nội dung chỉnh sửa")
+  }
   const cancelEdit = () => setEditing(false)
 
   const [noteOpen, setNoteOpen] = useState(false)
@@ -3610,7 +3626,8 @@ function useWidgetTools(widgetId, pkey) {
   }
 
   return {
-    editing, editText, setEditText, savedEdit, startEdit, saveEdit, cancelEdit,
+    editing, editInitialHTML, savedEdit, startEdit, saveEdit, cancelEdit,
+    bodyElRef, liveElRef,
     noteOpen, noteText, setNoteText, savedNote, openNote, closeNoteIfEmpty, saveNote, setNoteOpen,
   }
 }
@@ -3678,15 +3695,36 @@ function WidgetNotePanel({ tools }) {
 // Lưu trữ: vì giờ sửa tại chỗ trên cấu trúc gốc, bản đã lưu là SNAPSHOT HTML
 // (không phải text thuần) — khi hiển thị lại (không ở chế độ sửa), dùng
 // dangerouslySetInnerHTML để giữ đúng định dạng đã sửa.
+// BUG NGHIÊM TRỌNG ĐÃ SỬA (phát hiện qua phản hồi thực tế: gõ 1 chữ thì con
+// trỏ nhảy về đầu + nội dung bị lặp nhiều lần): bản trước gọi setState ở MỖI
+// KEYSTROKE (onInput -> tools.setEditText), khiến React re-render và áp lại
+// dangerouslySetInnerHTML lên đúng div đang gõ — React không biết người dùng
+// đang gõ tay vào DOM đó, nó so sánh chuỗi HTML và ghi đè lại toàn bộ nội
+// dung con, đẩy con trỏ về đầu. Gõ nhanh nhiều phím trước khi React kịp
+// re-render xong còn gây nhân bản nội dung (chồng nhiều phiên bản DOM).
+//
+// NGUYÊN TẮC ĐÚNG: 1 vùng contentEditable phải để TRÌNH DUYỆT tự quản lý
+// hoàn toàn nội dung DOM của nó trong khi đang gõ — KHÔNG set lại state ở
+// mỗi lần input (no controlled contentEditable). Chỉ đọc innerHTML ra một
+// lần DUY NHẤT khi cần (lúc bấm Lưu), qua ref — không qua state/render.
+// BUG NGHIÊM TRỌNG ĐÃ SỬA (phát hiện qua phản hồi thực tế: gõ 1 chữ thì con
+// trỏ nhảy về đầu + nội dung bị lặp nhiều lần): bản trước gọi setState ở MỖI
+// KEYSTROKE (onInput -> tools.setEditText), khiến React re-render và áp lại
+// dangerouslySetInnerHTML lên đúng div đang gõ — React không biết người dùng
+// đang gõ tay vào DOM đó, nó so sánh chuỗi HTML và ghi đè lại toàn bộ nội
+// dung con, đẩy con trỏ về đầu. Gõ nhanh nhiều phím trước khi React kịp
+// re-render xong còn gây nhân bản nội dung (chồng nhiều phiên bản DOM).
+//
+// NGUYÊN TẮC ĐÚNG: 1 vùng contentEditable phải để TRÌNH DUYỆT tự quản lý
+// hoàn toàn nội dung DOM của nó trong khi đang gõ — KHÔNG set lại state ở
+// mỗi lần input (no controlled contentEditable). Chỉ đọc innerHTML ra một
+// lần DUY NHẤT khi cần (lúc bấm Lưu), qua ref — không qua state/render.
 function WidgetEditableBody({ tools, bodyRef, children }) {
-  const liveRef = useRef(null)
-
   if (tools.editing) {
     return (
       <div>
-        <div ref={el => { liveRef.current = el; bodyRef.current = el }} className="card-edit-live" contentEditable suppressContentEditableWarning
-          onInput={e => tools.setEditText(e.currentTarget.innerHTML)}
-          dangerouslySetInnerHTML={{ __html: tools.savedEdit || (bodyRef.current ? bodyRef.current.innerHTML : "") }}/>
+        <div ref={el => { tools.liveElRef.current = el }} className="card-edit-live" contentEditable suppressContentEditableWarning
+          dangerouslySetInnerHTML={{ __html: tools.editInitialHTML }}/>
         <div className="card-edit-actions">
           <button className="card-edit-cancel" onClick={tools.cancelEdit}>Hủy</button>
           <button className="card-edit-save" onClick={tools.saveEdit}>Lưu</button>
@@ -3695,9 +3733,9 @@ function WidgetEditableBody({ tools, bodyRef, children }) {
     )
   }
   if (tools.savedEdit) {
-    return <div ref={bodyRef} dangerouslySetInnerHTML={{ __html: tools.savedEdit }}/>
+    return <div ref={el => { bodyRef.current = el; tools.bodyElRef.current = el }} dangerouslySetInnerHTML={{ __html: tools.savedEdit }}/>
   }
-  return <div ref={bodyRef}>{children}</div>
+  return <div ref={el => { bodyRef.current = el; tools.bodyElRef.current = el }}>{children}</div>
 }
 
 function FlagBtn({ pkey, label, sub, detail }){
