@@ -9,12 +9,27 @@ const API_URL = (typeof window !== "undefined" && window.MEDIFLOW_API_URL) || "h
 // ─── Lớp gọi Backend (Hugging Face Spaces) ───────────────────────────────────
 // analyzeText/analyze: phân tích hồ sơ. mdt/teaching: lấy biên bản hội chẩn và
 // bài giảng từ medparcours_modes_backend.py. Mọi lỗi sẽ ném ra để nơi gọi fallback.
-async function mpFetchJSON(path, body, ms=45000){
+async function mpFetchJSON(path, body, ms=45000, method="POST"){
   const ctrl = new AbortController()
   const timer = setTimeout(()=>ctrl.abort(), ms)
   try {
-    const res = await fetch(`${API_URL}${path}`, { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(body), signal: ctrl.signal })
-    if(!res.ok) throw new Error("API "+res.status)
+    const opts = { method, signal: ctrl.signal }
+    if (method !== "GET") {
+      opts.headers = { "Content-Type":"application/json" }
+      opts.body = JSON.stringify(body)
+    }
+    const res = await fetch(`${API_URL}${path}`, opts)
+    if(!res.ok) {
+      // Cố đọc detail lỗi từ backend (vd "đã tồn tại", "chưa có hồ sơ") thay
+      // vì chỉ ném mã số chung chung — các endpoint /patient/* trả lỗi rõ
+      // nghĩa qua HTTPException(detail=...), nên cần giữ lại để hiện đúng
+      // cho bác sĩ thay vì "API 409" khó hiểu.
+      let detail = ""
+      try { detail = (await res.json()).detail || "" } catch {}
+      const err = new Error(detail || ("API "+res.status))
+      err.status = res.status
+      throw err
+    }
     return await res.json()
   } finally { clearTimeout(timer) }
 }
@@ -28,6 +43,15 @@ const mpApi = {
   },
   mdt: (report) => mpFetchJSON("/mdt", { report }),
   teaching: (report) => mpFetchJSON("/teaching", { report }),
+  // ─── Lưu trữ hồ sơ lâu dài (tính năng "cập nhật hồ sơ theo thời gian
+  // thực") — KHÔNG đụng gì tới các hàm trên, hồ sơ demo/luồng phân tích
+  // 1 lần vẫn hoạt động y hệt cũ dù backend chưa cấu hình Turso (4 hàm này
+  // chỉ được gọi khi bác sĩ chủ động bấm "Lưu hồ sơ"/"Cập nhật hồ sơ").
+  savePatient: (report) => mpFetchJSON("/patient/save", { report }),
+  getPatient: (soBenhAn) => mpFetchJSON(`/patient/${encodeURIComponent(soBenhAn)}`, null, 45000, "GET"),
+  listPatients: () => mpFetchJSON("/patient", null, 45000, "GET"),
+  updatePatient: (soBenhAn, hoSoText, pages, nguonTaiLieu) =>
+    mpFetchJSON("/patient/update", { so_benh_an: soBenhAn, ho_so_text: hoSoText, pages, nguon_tai_lieu: nguonTaiLieu }, 90000),
 }
 
 // ─── Bóc chữ PDF NGAY TRONG TRÌNH DUYỆT (pdf.js từ CDN) ───────────────────────
@@ -2945,7 +2969,7 @@ function SidebarMinimap({ activeId, onNavigate }) {
 }
 
 // ─── REPORT PAGE ──────────────────────────────────────────────────────────────
-function ReportPage({ report, hoSoText, analysis, onReset, chatMessages, setChatMessages, onOpenHistory, onLogout }) {
+function ReportPage({ report, hoSoText, analysis, onReset, onReportUpdated, chatMessages, setChatMessages, onOpenHistory, onLogout }) {
   const [tab, setTab] = useState("report")
   const [viewMode, setViewMode] = useState("clinical")
   const [menuOpen, setMenuOpen] = useState(false)
@@ -2963,6 +2987,35 @@ function ReportPage({ report, hoSoText, analysis, onReset, chatMessages, setChat
   }
   const pkey = (report && report.thong_tin_benh_nhan && report.thong_tin_benh_nhan.so_benh_an) || "x"
   CURRENT_PKEY = pkey
+  // ─── Lưu trữ hồ sơ lâu dài (mới) — KHÔNG ảnh hưởng demo/luồng phân tích cũ.
+  // "savedStatus": null (chưa kiểm tra) | "chua_luu" | "da_luu" | "loi_ket_noi"
+  // — kiểm tra 1 lần khi mở report (xem hồ sơ này ĐÃ từng lưu trong database
+  // chưa), để hiện đúng nút "Lưu hồ sơ" hay "Cập nhật hồ sơ".
+  const [savedStatus, setSavedStatus] = useState(null)
+  const [savedMeta, setSavedMeta] = useState(null) // {so_lan_cap_nhat, cap_nhat_luc}
+  const [updatePanelOpen, setUpdatePanelOpen] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    if (!pkey || pkey === "x") { setSavedStatus(null); return }
+    mpApi.getPatient(pkey)
+      .then(data => { if (!cancelled) { setSavedStatus("da_luu"); setSavedMeta({ so_lan_cap_nhat: data.so_lan_cap_nhat, cap_nhat_luc: data.cap_nhat_luc }) } })
+      .catch(err => {
+        if (cancelled) return
+        if (err.status === 404) setSavedStatus("chua_luu")
+        else setSavedStatus("loi_ket_noi") // Turso chưa cấu hình / lỗi mạng — KHÔNG chặn xem báo cáo
+      })
+    return () => { cancelled = true }
+  }, [pkey])
+  const handleSavePatient = async () => {
+    try {
+      await mpApi.savePatient(report)
+      setSavedStatus("da_luu")
+      setSavedMeta({ so_lan_cap_nhat: 1, cap_nhat_luc: new Date().toISOString() })
+      mpToast("Đã lưu hồ sơ — có thể cập nhật thêm tài liệu cho lần khám sau")
+    } catch (err) {
+      mpToast(err.message || "Không lưu được hồ sơ — kiểm tra kết nối", "err")
+    }
+  }
   const [bmList, setBmList] = useState([])
   useEffect(() => { const h=()=>setBmList(bmGet(pkey)); h(); window.addEventListener("mp-bm",h); return ()=>window.removeEventListener("mp-bm",h) }, [pkey])
   const goToBookmark = (it) => {
@@ -3086,6 +3139,22 @@ function ReportPage({ report, hoSoText, analysis, onReset, chatMessages, setChat
                 {menuOpen && <>
                   <div className="nav-menu-ov" onClick={()=>setMenuOpen(false)}/>
                   <div className="nav-menu">
+                    <div className="nav-menu-sec">Lưu trữ hồ sơ</div>
+                    {savedStatus === "chua_luu" && (
+                      <button onClick={()=>{setMenuOpen(false);handleSavePatient()}}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                        Lưu hồ sơ (để cập nhật lần sau)
+                      </button>
+                    )}
+                    {savedStatus === "da_luu" && (
+                      <button onClick={()=>{setMenuOpen(false);setUpdatePanelOpen(true)}}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+                        Cập nhật hồ sơ{savedMeta ? ` (đã lưu, lần ${savedMeta.so_lan_cap_nhat})` : ""}
+                      </button>
+                    )}
+                    {savedStatus === "loi_ket_noi" && (
+                      <div className="nav-menu-hint">Chưa kết nối được hệ thống lưu trữ lâu dài — chỉ xem được báo cáo lần này, không lưu lại được.</div>
+                    )}
                     <div className="nav-menu-sec">Xuất & chia sẻ</div>
                     <button onClick={()=>{setMenuOpen(false);triggerPrint(report,"full",docNote,bmList,analysis)}}><Icon.FileText d={14} color="#475569"/>Xuất bản đầy đủ (3 chế độ)</button>
                     <button onClick={()=>{setMenuOpen(false);triggerHandoff(report,docNote,bmList)}}><Icon.FileText d={14} color="#475569"/>Tóm tắt 1 trang (bàn giao)</button>
@@ -3179,6 +3248,14 @@ function ReportPage({ report, hoSoText, analysis, onReset, chatMessages, setChat
       <DoctorNote value={docNote} onChange={saveNote}/>
       <ReadProgress/>
       <ScrollToTop/>
+      {updatePanelOpen && (
+        <UpdatePatientPanel pkey={pkey} onClose={()=>setUpdatePanelOpen(false)}
+          onUpdated={(result)=>{
+            setUpdatePanelOpen(false)
+            setSavedMeta({ so_lan_cap_nhat: result.so_lan_cap_nhat, cap_nhat_luc: new Date().toISOString() })
+            onReportUpdated && onReportUpdated(result.report, result.analysis)
+          }}/>
+      )}
     </div>
   )
 }
@@ -3760,6 +3837,80 @@ function bmIconFor(sub) {
   if (s.includes("diễn biến") || s.includes("tổng quan")) return <Icon.Clock d={15} color="#1D6FE8"/>
   return <Icon.Alert d={15} color="#DC2626"/>
 }
+function UpdatePatientPanel({ pkey, onClose, onUpdated }){
+  const [staged, setStaged] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [progress, setProgress] = useState(null)
+  const inputRef = useRef()
+
+  const onPick = (files) => {
+    const f = files && files[0]
+    if (!f) return
+    if (!f.name.toLowerCase().endsWith(".pdf")) {
+      setError("Hiện chỉ hỗ trợ tài liệu PDF cho tính năng cập nhật hồ sơ. Với định dạng khác, hãy dùng 'Phân tích hồ sơ mới' ở màn hình tải lên thông thường.")
+      return
+    }
+    setError(null)
+    setStaged(f)
+  }
+
+  const submit = async () => {
+    if (!staged) return
+    setLoading(true); setError(null); setProgress("Đang đọc tài liệu...")
+    try {
+      const text = await extractPdfText(staged, (done, total) => setProgress(`Đang đọc trang ${done}/${total}...`))
+      setProgress("Đang gộp vào hồ sơ đã lưu...")
+      const result = await mpApi.updatePatient(pkey, text, 0, staged.name)
+      if (!result.success) {
+        setError(result.error || "Không đọc được rõ nội dung tài liệu mới.")
+        setLoading(false)
+        return
+      }
+      mpToast(`Đã cập nhật hồ sơ — lần cập nhật thứ ${result.so_lan_cap_nhat}`)
+      onUpdated(result)
+    } catch (e) {
+      setError(e.message || "Có lỗi khi cập nhật hồ sơ. Hãy thử lại.")
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="upd-ov" onClick={loading ? undefined : onClose}>
+      <div className="upd-panel" onClick={e=>e.stopPropagation()}>
+        <div className="upd-head">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+          <span>Cập nhật hồ sơ</span>
+          {!loading && <button className="fp-close" onClick={onClose} title="Đóng"><Icon.Close d={15} color="#475569"/></button>}
+        </div>
+        <div className="upd-body">
+          <p className="upd-desc">Tải thêm tài liệu mới cho bệnh nhân này (vd kết quả tái khám, xét nghiệm bổ sung). Hệ thống sẽ <b>gộp</b> vào hồ sơ đã lưu — xét nghiệm/diễn biến cũ vẫn được giữ nguyên, không bị mất.</p>
+          {!staged && !loading && (
+            <div className="upd-drop" onClick={()=>inputRef.current.click()}>
+              <input ref={inputRef} type="file" accept=".pdf" style={{display:"none"}} onChange={e=>onPick(e.target.files)}/>
+              <Icon.Upload d={24} color="#1D6FE8"/>
+              <span>Chọn tài liệu PDF mới</span>
+            </div>
+          )}
+          {staged && !loading && (
+            <div className="upd-staged">
+              <Icon.FileText d={16} color="#1D6FE8"/><span>{staged.name}</span>
+              <button onClick={()=>setStaged(null)} title="Bỏ chọn"><Icon.Close d={13} color="#94A3B8"/></button>
+            </div>
+          )}
+          {loading && <div className="upd-loading"><span className="spin"/>{progress}</div>}
+          {error && <div className="rec-note err"><Icon.Alert d={12} color="#B91C1C"/>{error}</div>}
+          {staged && !loading && (
+            <button className="btn-primary" style={{width:"100%", marginTop:"12px"}} onClick={submit}>
+              <Icon.Upload d={15} color="white"/>Cập nhật hồ sơ
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function BookmarkPage({ pkey, items, onGo, onBack }){
   const [openI, setOpenI] = useState(-1)
   return (
@@ -5979,7 +6130,7 @@ function TeachingView({ report }){
 }
 
 // ─── Lịch sử bệnh án (overlay) ────────────────────────────────────────────────
-function HistoryPanel({ onClose, onOpen, onOpenEcgEntry, currentId }){
+function HistoryPanel({ onClose, onOpen, onOpenDbPatient, onOpenEcgEntry, currentId }){
   const ecgList = loadEcgHistory()
   const demoEntries = Object.entries(ECG_DEMO_SAMPLES).map(([key, sample]) => ({
     id: "demo-" + key,
@@ -5989,6 +6140,17 @@ function HistoryPanel({ onClose, onOpen, onOpenEcgEntry, currentId }){
     nhip_deu: null,
     result: sample,
   }))
+  // Hồ sơ THẬT đã lưu (Turso) — tải riêng, không chặn hiện demo nếu lỗi
+  // mạng/chưa cấu hình Turso (đúng nguyên tắc không gây gián đoạn).
+  const [dbPatients, setDbPatients] = useState(null) // null = đang tải, [] = rỗng, [...] = có dữ liệu
+  const [dbError, setDbError] = useState(null)
+  useEffect(() => {
+    let cancelled = false
+    mpApi.listPatients()
+      .then(r => { if (!cancelled) setDbPatients(r.patients || []) })
+      .catch(err => { if (!cancelled) { setDbPatients([]); setDbError(err.message) } })
+    return () => { cancelled = true }
+  }, [])
   return (
     <div className="hist-overlay" onClick={onClose}>
       <div className="hist-modal" onClick={e=>e.stopPropagation()}>
@@ -6008,6 +6170,28 @@ function HistoryPanel({ onClose, onOpen, onOpenEcgEntry, currentId }){
               <span className="hist-open">Mở ▶</span>
             </div>
           ))}
+          {dbPatients && dbPatients.length > 0 && (
+            <>
+              <div className="hist-section-lbl"><Icon.FileText d={13} color="#059669"/>Hồ sơ đã lưu</div>
+              {dbPatients.map(p=>(
+                <div key={p.so_benh_an} className={`hist-item${currentId===("db-"+p.so_benh_an)?" cur":""}`} onClick={()=>onOpenDbPatient(p.so_benh_an)}>
+                  <div className="hist-avatar" style={{background:"linear-gradient(135deg,#D1FAE5,#A7F3D0)",color:"#059669"}}>{(p.ho_ten||"?").charAt(0)}</div>
+                  <div className="hist-info">
+                    <div className="hist-name">{p.ho_ten || "(chưa rõ tên)"} <span className="hist-meta">BA {p.so_benh_an}</span></div>
+                    <div className="hist-dx">Đã cập nhật {p.so_lan_cap_nhat} lần</div>
+                    <div className="hist-foot"><Icon.Clock d={11} color="#94a3b8"/>Cập nhật gần nhất: {fmtDateTime(p.cap_nhat_luc)}</div>
+                  </div>
+                  <span className="hist-open">Mở ▶</span>
+                </div>
+              ))}
+            </>
+          )}
+          {dbPatients === null && (
+            <div className="hist-loading-hint">Đang tải hồ sơ đã lưu...</div>
+          )}
+          {dbError && (
+            <div className="hist-loading-hint">Chưa kết nối được hệ thống lưu trữ lâu dài — chỉ hiện được hồ sơ mẫu.</div>
+          )}
           {(ecgList.length > 0 || demoEntries.length > 0) && (
             <>
               <div className="hist-section-lbl"><Icon.Pulse d={13} color="#DC2626"/>Lịch sử quét điện tâm đồ</div>
@@ -6657,207 +6841,6 @@ body.theme-dark .ul-pair li{background:#141E2C;border-color:#2A3A52}
 body.theme-dark .ul-pair li b{color:#E2EBF7}
 body.theme-dark .ul-pair li span{color:#9FB3CC}
 body.theme-dark .teach-chip{background:#1A2536;color:#C6D5E8;border-color:#2A3A52}
-
-/* ===== DARK v4.5: Update contrast color ===== */
-/* Thêm Darkmode */
-body.theme-dark .phase-chip:not(.lead) { background:#1B2A42; color:#E2EAF5; border-color:#38506F; }
-
-/* ========================= DARK MODE CONTRAST FIXES ========================= */
-
-/* 1) Chẩn đoán hình ảnh qua 3 giai đoạn */
-body.theme-dark .echo-tl-modes { background:#1C2740; border-color:#2F4368; }
-body.theme-dark .echo-tl-modes button { color:#C7D4E6; }
-body.theme-dark .echo-tl-modes button.on { background:#F8FBFF; color:#1D6FE8; }
-body.theme-dark .ai-insight { background:#1A2536; border-color:#324866; }
-body.theme-dark .ai-insight-text { color:#E6EEF9; }
-body.theme-dark .ai-insight-tag, body.theme-dark .ai-insight-text strong { color:#7FB0FF; }
-
-/* 2) Chi tiết 9 lượt siêu âm */
-body.theme-dark .echo-seg { background:#1C2740; border-color:#2F4368; }
-body.theme-dark .echo-seg button { color:#C7D4E6; }
-body.theme-dark .echo-seg button.on { background:#F8FBFF; color:#1D6FE8; }
-body.theme-dark .echo-tbl-scroll { border-color:#2A3A52; }
-body.theme-dark .echo-tbl th { background:#1A2536; color:#EAF1FB; border-bottom-color:#2A3A52; }
-body.theme-dark .echo-tbl td { color:#D6E2F2; border-bottom-color:#24344B; }
-body.theme-dark .echo-tbl tr.latest { background:#1C2B42; }
-body.theme-dark .echo-tbl tr.warn { background:#3A2024; }
-body.theme-dark .echo-phase-pill { font-weight:700; }
-
-/* Ô ghi chú trong bảng siêu âm */
-.echo-note-cell { font-size:11px; color:#5A7BB8; }
-body.theme-dark .echo-note-cell { color:#CFE0F5; }
-body.theme-dark .echo-note-cell.warn { color:#FFD1D1; }
-body.theme-dark .echo-note-bullets li { color:inherit; }
-
-/* 3) Diễn biến lâm sàng theo giai đoạn */
-body.theme-dark .reason-title, body.theme-dark .reason-body, body.theme-dark .reason-bullets li { color:#EAF1FB; }
-body.theme-dark .reason-bullets, body.theme-dark .reason-body { border-top-color:#324866; }
-
-/* Badge giai đoạn trong phần reasoning */
-body.theme-dark .reason-phase { background:rgba(255,255,255,0.08) !important; border-color:currentColor !important; font-weight:800; }
-
-/* Chip trong timeline phase */
-body.theme-dark .phase-chip:not(.lead) { background:#1B2A42; color:#E2EAF5; border-color:#38506F; }
-body.theme-dark .phase-chip.lead { background:#2A3750; color:#FFFFFF; border-color:#4A6790; }
-
-/* 4) Đơn thuốc và lịch dùng */
-body.theme-dark .med-item { background:#1A2536; border-color:#2A3A52; }
-body.theme-dark .med-name { color:#EAF1FB; }
-body.theme-dark .med-nhom { color:#7FB0FF; }
-body.theme-dark .med-dose { color:#C6D5E8; }
-body.theme-dark .med-period { color:#BFD0E5; }
-body.theme-dark .med-status.done { background:#E2E8F0; color:#475569; }
-body.theme-dark .med-status.active { background:#DCFCE7; color:#047857; }
-body.theme-dark .med-status.unknown { background:#FEF3C7; color:#B45309; }
-body.theme-dark .gantt-wrap { background:#141E2C; border-color:#2A3A52; }
-body.theme-dark .gantt-title, body.theme-dark .gantt-label-name { color:#EAF1FB; }
-body.theme-dark .gantt-label-date, body.theme-dark .gantt-axis-track span { color:#AFC3DD; }
-body.theme-dark .gantt-track { background:#1C2740; }
-body.theme-dark .gantt-grid-line { background:#324866; }
-
-/* 5) Kiểm tra an toàn đơn thuốc */
-
-/*
-QUAN TRỌNG:
-Rule cũ này quá rộng:
-body.theme-dark .drug-egfr-box * { color:#C6D5E8; }
-Nó làm tag/pill bị nhạt.
-Phần bên dưới sẽ override lại cho đúng.
-*/
-
-body.theme-dark .drug-egfr-lbl, body.theme-dark .drug-egfr-note, body.theme-dark .egfr-inputs { color:#C6D5E8; }
-body.theme-dark .egfr-inputs b { color:#FFFFFF; }
-body.theme-dark .drug-egfr-tag.ok { background:#DCFCE7; color:#047857 !important; }
-body.theme-dark .drug-egfr-tag.warn { background:#FEF3C7; color:#B45309 !important; }
-body.theme-dark .drug-egfr-tag.crit { background:#FEE2E2; color:#B91C1C !important; }
-body.theme-dark .mf { background:#1A2536; color:#EAF1FB; }
-body.theme-dark .mf-op { color:#AFC3DD; }
-
-/* Alert card bên trong drug safety */
-body.theme-dark .drug-section-hd { color:#EAF1FB; }
-body.theme-dark .drug-alert { background:#F8FAFC !important; border-color:#CBD5E1 !important; }
-body.theme-dark .drug-pair, body.theme-dark .drug-conseq, body.theme-dark .drug-suggest { color:#0F2740; }
-body.theme-dark .drug-suggest strong { color:#0B1F2A; }
-body.theme-dark .drug-caution { background:#FFF7D6; border-color:#FCD34D; color:#7C2D12; }
-body.theme-dark .drug-caution b { color:#B45309; }
-body.theme-dark .prio-src { background:#EAF2FF; border-color:#BFDBFE; color:#1D4ED8; }
-body.theme-dark .drug-disclaimer { color:#AFC3DD; border-top-color:#2A3A52; }
-
-/* Sửa độ tương phản phần Biện luận lâm sàng */
-body.theme-dark .reason-item { background:#1A2536 !important; border-color:#3A4D69 !important; }
-body.theme-dark .reason-item .reason-title { color:#FFFFFF !important; }
-body.theme-dark .reason-item .reason-bullets li, body.theme-dark .reason-item .reason-body { color:#DCE7F5 !important; }
-body.theme-dark .reason-item .reason-bullets, body.theme-dark .reason-item .reason-body { border-top-color:#415571 !important; }
-
-/* Tóm tắt toàn cảnh - dark mode */
-body.theme-dark .summary-phase { background:#1A2536 !important; border-color:#3A4D69 !important; }
-body.theme-dark .summary-phase .bullet-list li { color:#E2EBF7 !important; }
-body.theme-dark .summary-phase .bullet-list li::before { background:#60A5FA; }
-
-/* Tiêu đề từng giai đoạn */
-body.theme-dark .summary-phase-title { font-weight:800; }
-
-/* Giữ số thứ tự nổi rõ */
-body.theme-dark .summary-phase-num { color:#FFFFFF !important; }
-
-/* ========================= DARK MODE: ECHO CHART + PRIORITY BOARD ========================= */
-
-/* 1) Đồ thị diễn biến EF và chênh áp */
-body.theme-dark .echo-tl-wrap { background:#131D2E; border-color:#2A3A52; box-shadow:0 4px 18px rgba(0,0,0,0.22); }
-body.theme-dark .echo-tl-wrap svg { background:#101A2B; border:1px solid #263750; border-radius:12px; }
-body.theme-dark .echo-tl-legend span { color:#C7D4E6; }
-
-/* Nhãn EF đang dùng màu xanh đậm inline nên khó đọc trên nền tối */
-body.theme-dark .echo-tl-wrap svg text[fill="#1D3A6E"] { fill:#DCE8F8 !important; }
-
-/* Làm các nhãn trục xanh sáng hơn */
-body.theme-dark .echo-tl-wrap svg text[fill="#1D6FE8"] { fill:#60A5FA !important; }
-
-/* Nhãn ngày */
-body.theme-dark .echo-tl-wrap svg text[fill="#94A3B8"] { fill:#AFC1D8 !important; }
-
-/* Khung phân tích AI dưới biểu đồ */
-body.theme-dark .echo-tl-wrap .ai-insight { background:#17243A; border-color:#304765; }
-body.theme-dark .echo-tl-wrap .ai-insight-text { color:#E2EBF7; }
-
-/* 2) Phân tầng ưu tiên lâm sàng */
-body.theme-dark .prio-board { background:#2A3A52; }
-
-/* Tiêu đề Xử lý / Theo dõi / Ổn định */
-body.theme-dark .prio-col-head { background:#18243A !important; border-bottom:1px solid #30435F; }
-
-/* Phần thân mỗi cột */
-body.theme-dark .prio-col-body { background:#101A2B; }
-
-/* Card nội dung */
-body.theme-dark .prio-box { background:#18243A; border-color:#30435F; box-shadow:0 2px 8px rgba(0,0,0,0.14); }
-body.theme-dark .prio-box-name { color:#F8FAFC; }
-body.theme-dark .prio-box-reason { color:#C7D5E8; }
-body.theme-dark .prio-box-lbl { color:#EAF1FB; }
-
-/* Dòng “Không có mục nào” hiện đang quá mờ */
-body.theme-dark .prio-col-empty { color:#91A6C2; }
-
-/* Số lượng ở đầu mỗi cột */
-body.theme-dark .prio-col-n { background:#0F192A; color:#F1F5F9; border:1px solid #30435F; }
-
-/* Nút nguồn hướng dẫn */
-body.theme-dark .prio-src { background:#EAF2FF; color:#1D4ED8; border-color:#BFDBFE; }
-body.theme-dark .prio-src:hover { background:#1D6FE8; color:#FFFFFF; }
-
-/* ========================================= DARK MODE: UPLOAD + GHI ÂM + CONFIRM LOGOUT ========================================= */
-
-/* 1. Khu vực kéo thả tài liệu */
-body.theme-dark .upload-zone { background:#141D2F !important; border-color:#38506F !important; box-shadow:0 10px 36px rgba(0,0,0,0.28); }
-body.theme-dark .upload-zone:hover { background:#18243A !important; border-color:#5B95F2 !important; }
-body.theme-dark .upload-zone.drag { background:#1B2B44 !important; border-color:#60A5FA !important; box-shadow:0 0 0 5px rgba(96,165,250,0.12), 0 12px 40px rgba(0,0,0,0.30); }
-body.theme-dark .upload-icon { background:linear-gradient(135deg, rgba(96,165,250,0.18), rgba(45,212,191,0.14)); border:1px solid #304765; }
-body.theme-dark .upload-title { color:#F8FAFC !important; }
-body.theme-dark .upload-sub { color:#B8C8DC !important; }
-body.theme-dark .upload-privacy, body.theme-dark .fmt-lbl { color:#9FB3CC !important; }
-
-/* Dòng trạng thái khi đang phân tích đang dùng inline color */
-body.theme-dark .upload-zone > div > p { color:#C7D4E6 !important; }
-body.theme-dark .upload-zone > div > p:first-of-type { color:#F8FAFC !important; }
-
-/* Các nhãn PDF, DOC, XLS... */
-body.theme-dark .fmt-chip { background:#1E2B44 !important; border:1px solid #38506F; color:#DCE8F8 !important; }
-
-/* Link demo và lịch sử */
-body.theme-dark .demo-link, body.theme-dark .hist-link { color:#7FB0FF; }
-body.theme-dark .demo-link { background:rgba(91,149,242,0.10); border-color:#304765; }
-body.theme-dark .demo-link:hover, body.theme-dark .hist-link:hover { background:rgba(91,149,242,0.18); }
-
-/* 2. Khung lời dặn và ghi âm */
-body.theme-dark .rec-inline-wrap { background:#111C2E !important; border-color:#30435F !important; }
-body.theme-dark .rec-inline-h { color:#F1F5F9 !important; }
-body.theme-dark .smart-note { background:#0F192A !important; border-color:#30435F !important; }
-body.theme-dark .smart-note:focus-within { border-color:#60A5FA !important; }
-body.theme-dark .smart-note.rec { border-color:#2DD4BF !important; box-shadow:0 0 0 3px rgba(45,212,191,0.10); }
-body.theme-dark .smart-note-ta { background:#0F192A !important; color:#EAF1FB !important; }
-body.theme-dark .smart-note-ta::placeholder { color:#8398B5 !important; opacity:1; }
-body.theme-dark .smart-note-bar { background:#152136 !important; border-top-color:#30435F !important; }
-body.theme-dark .sn-mic { background:#1B2A42 !important; border-color:#3A5272 !important; color:#DCE8F8 !important; }
-body.theme-dark .sn-mic:hover { background:#203452 !important; border-color:#2DD4BF !important; color:#5EEAD4 !important; }
-body.theme-dark .sn-mic.on { background:#123630 !important; border-color:#2DD4BF !important; color:#5EEAD4 !important; }
-body.theme-dark .sn-count { color:#AFC1D8 !important; }
-
-/* Nút đính kèm bị vô hiệu hóa */
-body.theme-dark .sn-send:disabled { background:#34445D; color:#9FB1C8; opacity:1; }
-
-/* 3. Hộp xác nhận đăng xuất */
-body.theme-dark .cfm { background:#161F33 !important; border:1px solid #30435F; box-shadow:0 24px 60px rgba(0,0,0,0.48); }
-body.theme-dark .cfm-t { color:#F8FAFC !important; }
-body.theme-dark .cfm-m { color:#BFD0E5 !important; }
-
-/* Nút Hủy */
-body.theme-dark .cfm-cancel { background:#1E2B44 !important; border-color:#3A5272 !important; color:#E2EBF7 !important; }
-body.theme-dark .cfm-cancel:hover { background:#293A57 !important; border-color:#5B78A0 !important; color:#FFFFFF !important; }
-
-/* Nút Đăng xuất */
-body.theme-dark .cfm-ok.danger { background:#DC2626; color:#FFFFFF; }
-body.theme-dark .cfm-ok.danger:hover { background:#B91C1C; }
-
 /* ===== TONG QUAN NHANH (CaseOverview) ===== */
 .co-wrap{max-width:1100px;margin:0 auto 20px;background:#fff;border:1px solid var(--border);border-radius:16px;padding:16px 18px;box-shadow:var(--shadow-sm)}
 .co-head{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
@@ -6942,6 +6925,25 @@ body.theme-dark .mt-chip{background:#141E2C;border-color:#2A3A52}
 body.theme-dark .mt-chip.on{background:rgba(29,111,232,0.18)}
 body.theme-dark .takeaway-txt,body.theme-dark .clin-txt,body.theme-dark .lead,body.theme-dark .desc{color:#D6E2F2}
 .sidebar-item.active svg{opacity:1}
+.upd-ov{position:fixed;inset:0;z-index:145;background:rgba(15,39,64,.45);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:20px;animation:toastIn .15s ease}
+.upd-panel{background:var(--glass);border-radius:16px;width:440px;max-width:100%;box-shadow:0 24px 60px rgba(15,39,64,.3);overflow:hidden}
+.upd-head{display:flex;align-items:center;gap:9px;padding:14px 18px;border-bottom:1px solid var(--border);font-size:14.5px;font-weight:700;color:var(--navy)}
+.upd-head span{flex:1}
+.upd-body{padding:18px}
+.upd-desc{font-size:12.5px;color:var(--muted2);line-height:1.6;margin:0 0 14px}
+.upd-drop{border:2px dashed var(--border);border-radius:12px;padding:28px 16px;display:flex;flex-direction:column;align-items:center;gap:9px;cursor:pointer;font-size:13px;font-weight:600;color:var(--navy2);transition:border-color .15s,background .15s}
+.upd-drop:hover{border-color:#1D6FE8;background:rgba(29,111,232,.04)}
+.upd-staged{display:flex;align-items:center;gap:9px;border:1px solid var(--border);border-radius:10px;padding:10px 13px;font-size:13px;color:var(--navy2)}
+.upd-staged span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.upd-staged button{border:none;background:transparent;cursor:pointer;display:inline-flex}
+.upd-loading{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--navy2);padding:14px 0}
+.spin{width:16px;height:16px;border:2.5px solid #DCE5F2;border-top-color:#1D6FE8;border-radius:50%;display:inline-block;animation:mp-spin .7s linear infinite;flex-shrink:0}
+@keyframes mp-spin{to{transform:rotate(360deg)}}
+body.theme-dark .upd-panel{background:#161F33}
+body.theme-dark .upd-head{color:#EAF1FB;border-color:#28364E}
+body.theme-dark .upd-drop{border-color:#2F4368;color:#9FB3CC}
+body.theme-dark .upd-drop:hover{border-color:#5FA8FF;background:rgba(95,168,255,.06)}
+body.theme-dark .upd-staged{border-color:#2F4368;color:#9FB3CC}
 .sh-ov{position:fixed;inset:0;z-index:140;background:rgba(15,39,64,.45);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:20px;animation:toastIn .15s ease}
 .sh-panel{background:#fff;border-radius:16px;width:432px;max-width:100%;box-shadow:0 24px 60px rgba(15,39,64,.3);overflow:hidden}
 .sh-head{display:flex;align-items:center;gap:9px;padding:14px 16px;border-bottom:1px solid var(--border);font-size:14px;font-weight:700;color:var(--navy)}
@@ -7040,6 +7042,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .hist-foot{display:flex;align-items:center;gap:5px;font-size:11px;color:#94a3b8}
 .hist-open{font-size:12px;font-weight:600;color:#1D6FE8;flex-shrink:0}
 .hist-section-lbl{display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#DC2626;margin:10px 2px 2px}
+.hist-loading-hint{font-size:12px;color:#94A3B8;padding:8px 4px;text-align:center}
 .hist-item-ecg:hover{border-color:#DC2626;background:rgba(220,38,38,.03);box-shadow:0 6px 18px rgba(220,38,38,.1)}
 .hist-item-ecg-demo{border-style:dashed}
 .hist-demo-tag{display:inline-block;font-size:9.5px;font-weight:700;color:#94A3B8;background:#F1F5F9;border-radius:999px;padding:1px 7px;margin-left:6px;vertical-align:middle;text-transform:uppercase;letter-spacing:.03em}
@@ -7218,6 +7221,7 @@ body.theme-dark .hist-dx{color:#9FB3CC}
 .nav-menu button.danger{color:#DC2626}
 .nav-menu button.danger:hover{background:#fef2f2}
 .nav-menu-sec{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#9fb2cc;padding:9px 12px 4px}
+.nav-menu-hint{font-size:11.5px;color:#94A3B8;padding:4px 12px 10px;line-height:1.5}
 .nav-menu-sec:first-child{padding-top:5px}
 .nav-menu{max-height:calc(100vh - 86px);overflow-y:auto}
 body.theme-dark .nav-menu-sec{color:#7689A8}
@@ -7690,6 +7694,21 @@ export default function App() {
     setReport(rec.data); setHoSoText(JSON.stringify(rec.data)); setAnalysis(null)
     initChat(rec.data); setCurrentId(rec.id); setShowHistory(false); setUploadError(null); setState("report")
   }
+  // Mở hồ sơ THẬT đã lưu (Turso) — khác loadRecord (demo cố định): dùng đúng
+  // analysis backend đã tính sẵn (GET /patient/{id} trả cả report+analysis),
+  // không để null, vì có sẵn dữ liệu thật tốt hơn cách demo cũ.
+  const loadDbPatient = async (soBenhAn) => {
+    setShowHistory(false); setLoading(true); setLoadingMsg("Đang tải hồ sơ đã lưu...")
+    try {
+      const data = await mpApi.getPatient(soBenhAn)
+      setReport(data.report); setHoSoText(JSON.stringify(data.report)); setAnalysis(data.analysis)
+      initChat(data.report); setCurrentId("db-" + soBenhAn); setUploadError(null); setState("report")
+    } catch (err) {
+      mpToast(err.message || "Không mở được hồ sơ đã lưu", "err")
+    } finally {
+      setLoading(false); setLoadingMsg("")
+    }
+  }
 
   if (!authed) {
     return (<><style>{CSS}</style><style>{EXTRA_CSS}</style><LoginPage onLogin={login}/><ToastHost/></>)
@@ -7704,13 +7723,14 @@ export default function App() {
         {state === "report" && report && (
           <ReportPage report={report} hoSoText={hoSoText} analysis={analysis}
             onReset={()=>{setState("upload");setReport(null);setAnalysis(null);setChatMessages([]);setCurrentId(null)}}
+            onReportUpdated={(newReport, newAnalysis)=>{setReport(newReport);setAnalysis(newAnalysis)}}
             chatMessages={chatMessages} setChatMessages={setChatMessages}
             onOpenHistory={()=>setShowHistory(true)} onLogout={logout}/>
         )}
         {state === "ecg" && (
           <EcgPage onBack={()=>{setState("upload");setEcgInitial(null)}} initialResult={ecgInitial} onLogout={logout}/>
         )}
-        {showHistory && <HistoryPanel onClose={()=>setShowHistory(false)} onOpen={loadRecord} onOpenEcgEntry={(entry)=>{setEcgInitial(entry);setShowHistory(false);setState("ecg")}} currentId={currentId}/>}
+        {showHistory && <HistoryPanel onClose={()=>setShowHistory(false)} onOpen={loadRecord} onOpenDbPatient={loadDbPatient} onOpenEcgEntry={(entry)=>{setEcgInitial(entry);setShowHistory(false);setState("ecg")}} currentId={currentId}/>}
         <ToastHost/>
         <ConfirmHost/>
         <ShortcutHelp/>

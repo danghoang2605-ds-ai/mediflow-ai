@@ -13,6 +13,7 @@ try:
     load_dotenv()
 except Exception:
     pass
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -24,9 +25,27 @@ import anthropic
 import clinical_rules
 import ecg_engine
 import document_extract
+import database
 from cde.engine import evaluate_v2
 
-app = FastAPI(title="MediFlow AI", version="1.0.0")
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    """Khởi tạo bảng database lúc app start — KHÔNG làm sập app nếu lỗi
+    (vd chưa cấu hình TURSO_DATABASE_URL/TURSO_AUTH_TOKEN, hoặc Turso tạm
+    thời không phản hồi). Các endpoint cũ (/analyze, /chat...) không phụ
+    thuộc database, phải tiếp tục hoạt động bình thường dù phần lưu trữ
+    lâu dài tạm thời không khả dụng — đúng nguyên tắc không gây gián đoạn
+    sản phẩm đang chạy ổn khi thêm tính năng mới."""
+    try:
+        database.init_db()
+    except Exception as e:
+        print(f"[CẢNH BÁO] Không khởi tạo được database lưu trữ lâu dài: {e}. "
+              f"Tính năng 'Lưu hồ sơ' / 'Cập nhật hồ sơ' sẽ báo lỗi rõ ràng khi "
+              f"được gọi, nhưng các tính năng phân tích hồ sơ khác vẫn hoạt động bình thường.")
+    yield
+
+
+app = FastAPI(title="MediFlow AI", version="1.0.0", lifespan=_lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -825,6 +844,173 @@ async def analyze_text(req: AnalyzeTextRequest):
     return run_analysis_pipeline(req.ho_so_text, pages=req.pages, method="client_text")
 
 
+# ─── LƯU TRỮ HỒ SƠ LÂU DÀI + CẬP NHẬT THEO THỜI GIAN THỰC ────────────────────
+# Tính năng mới: bệnh nhân đã quét 1 lần, lần sau có thêm tài liệu (tái khám,
+# xét nghiệm mới...) -> bác sĩ tải thêm, hệ thống GỘP vào hồ sơ cũ thay vì
+# tạo bản ghi tách biệt. Dùng database.py (Turso/libSQL) để lưu lâu dài, độc
+# lập với vòng đời container Hugging Face Space.
+
+class SavePatientRequest(BaseModel):
+    report: dict
+
+
+@app.post("/patient/save")
+async def save_patient(req: SavePatientRequest):
+    """Lưu hồ sơ MỚI lần đầu cho 1 bệnh nhân (theo số bệnh án trong report).
+    Nếu số bệnh án đã có hồ sơ lưu trữ -> báo lỗi rõ, không ghi đè ngầm
+    (tránh mất dữ liệu cũ do nhầm lẫn 'mới' với 'cập nhật')."""
+    try:
+        result = database.save_new_patient(req.report)
+    except Exception as e:
+        raise HTTPException(status_code=503,
+                             detail=f"Không kết nối được tới hệ thống lưu trữ lâu dài: {e}")
+    if not result.get("success"):
+        raise HTTPException(status_code=409, detail=result.get("message", result.get("error", "Lỗi không xác định")))
+    return result
+
+
+@app.get("/patient/{so_benh_an}")
+async def get_patient(so_benh_an: str):
+    """Lấy hồ sơ đã lưu theo số bệnh án — kèm TÍNH LẠI analysis qua rule
+    engine hiện tại (KHÔNG lưu analysis cũ trong database — xem lý do đầy đủ
+    trong database.py: analysis luôn tính lại được từ report, tự động hưởng
+    lợi nếu sau này rule engine được mở rộng)."""
+    try:
+        data = database.get_patient(so_benh_an)
+    except Exception as e:
+        raise HTTPException(status_code=503,
+                             detail=f"Không kết nối được tới hệ thống lưu trữ lâu dài: {e}")
+    if data is None:
+        raise HTTPException(status_code=404, detail=f"Chưa có hồ sơ lưu trữ cho số bệnh án {so_benh_an}.")
+    analysis = evaluate_v2(data["report"])
+    return {
+        "success": True,
+        "report": data["report"],
+        "analysis": analysis,
+        "so_lan_cap_nhat": data["so_lan_cap_nhat"],
+        "tao_luc": data["tao_luc"],
+        "cap_nhat_luc": data["cap_nhat_luc"],
+    }
+
+
+@app.get("/patient")
+async def list_patients_endpoint(limit: int = 50):
+    """Danh sách hồ sơ đã lưu, mới cập nhật gần nhất lên đầu — dùng cho màn
+    "Lịch sử bệnh án" trên frontend (thay 2 hồ sơ demo hard-code cũ)."""
+    try:
+        return {"success": True, "patients": database.list_patients(limit=limit)}
+    except Exception as e:
+        raise HTTPException(status_code=503,
+                             detail=f"Không kết nối được tới hệ thống lưu trữ lâu dài: {e}")
+
+
+class UpdatePatientRequest(BaseModel):
+    so_benh_an: str
+    ho_so_text: str  # text tài liệu MỚI (chưa qua Bước 1) — giống /analyze_text
+    pages: int = 0
+    nguon_tai_lieu: str = ""  # tên file tài liệu mới, để log vào patient_history
+
+
+@app.post("/patient/update")
+async def update_patient(req: UpdatePatientRequest):
+    """
+    Tính năng "cập nhật hồ sơ theo thời gian thực": bác sĩ tải thêm 1 tài
+    liệu mới cho bệnh nhân ĐÃ CÓ hồ sơ lưu trữ (theo so_benh_an). Tài liệu
+    mới đi qua ĐÚNG Bước 1 (LLM Extraction) như luồng phân tích bình thường,
+    sau đó GỘP vào report cũ (database.merge_reports) thay vì phân tích độc
+    lập rồi ghi đè.
+
+    KHÔNG TÁI SỬ DỤNG run_analysis_pipeline() ở đây — vì hàm đó chạy Bước
+    2-3 (rule engine + LLM diễn giải) trên 1 report ĐỘC LẬP. Endpoint này
+    cần Bước 1 RIÊNG (chỉ trích xuất report_moi thô), rồi GỘP, rồi MỚI chạy
+    Bước 2-3 trên report ĐÃ GỘP — thứ tự khác nhau quan trọng: nếu chạy rule
+    engine trên report_moi riêng rồi mới gộp kết quả, các thang điểm cần dữ
+    liệu tích lũy (vd xu hướng nhiều lần xét nghiệm) sẽ SAI vì chỉ thấy dữ
+    liệu của tài liệu mới, không thấy toàn bộ lịch sử.
+    """
+    existing = None
+    try:
+        existing = database.get_patient(req.so_benh_an)
+    except Exception as e:
+        raise HTTPException(status_code=503,
+                             detail=f"Không kết nối được tới hệ thống lưu trữ lâu dài: {e}")
+    if existing is None:
+        raise HTTPException(status_code=404,
+                             detail=f"Chưa có hồ sơ lưu trữ cho số bệnh án {req.so_benh_an}. "
+                                    f"Dùng /patient/save để lưu hồ sơ mới trước.")
+
+    # ─── Bước 1 RIÊNG cho tài liệu mới (không chạy Bước 2-3 ở đây) ──────────
+    raw = call_claude(system=REPORT_SYSTEM, user_message=req.ho_so_text)
+    json_text = raw.strip()
+    if "```json" in json_text:
+        json_text = json_text.split("```json")[1].split("```")[0]
+    elif "```" in json_text:
+        json_text = json_text.split("```")[1].split("```")[0]
+    json_text = json_text.strip()
+    start, end = json_text.find("{"), json_text.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        json_text = json_text[start:end + 1]
+    try:
+        report_moi = json.loads(json_text)
+    except json.JSONDecodeError:
+        return JSONResponse({
+            "success": False,
+            "error": "Không đọc được rõ nội dung tài liệu mới để tạo JSON. "
+                     "Hãy thử lại hoặc kiểm tra định dạng tài liệu.",
+        }, status_code=200)
+
+    try:
+        result = database.update_patient_with_new_document(req.so_benh_an, report_moi, req.nguon_tai_lieu)
+    except Exception as e:
+        raise HTTPException(status_code=503,
+                             detail=f"Không kết nối được tới hệ thống lưu trữ lâu dài: {e}")
+    if not result.get("success"):
+        raise HTTPException(status_code=409, detail=result.get("message", "Lỗi không xác định"))
+
+    # ─── Bước 2-3 chạy TRÊN REPORT ĐÃ GỘP (không phải report_moi riêng) ─────
+    merged_report = result["report"]
+    engine = evaluate_v2(merged_report)
+    trend_summary = ""
+    if engine["trend_facts"]:
+        try:
+            trend_summary = call_claude(
+                system=TREND_SYSTEM,
+                user_message="Các mốc chênh lệch chỉ số (chỉ diễn đạt, không bịa thêm):\n"
+                             + json.dumps(engine["trend_facts"], ensure_ascii=False),
+                max_tokens=400
+            ).strip()
+        except Exception:
+            trend_summary = ""
+
+    return {
+        "success": True,
+        "so_benh_an": req.so_benh_an,
+        "so_lan_cap_nhat": result["so_lan_cap_nhat"],
+        "report": merged_report,
+        "analysis": {
+            "egfr": engine["egfr"],
+            "egfr_detail": engine.get("egfr_detail"),
+            "priority_findings": engine["priority_findings"],
+            "drug_safety": engine["drug_safety"],
+            "trend_summary": trend_summary,
+            "risk_scores": engine.get("risk_scores"),
+            "ttr": engine.get("ttr"),
+            "care_gaps": engine.get("care_gaps"),
+            "active_profiles": engine.get("active_profiles", []),
+            "indicators_applicable": engine.get("indicators_applicable", []),
+            "anticoagulant_status": engine.get("anticoagulant_status"),
+            "inr_target_detail": engine.get("inr_target_detail"),
+            "ttr_khong_tinh_duoc_ly_do": engine.get("ttr_khong_tinh_duoc_ly_do"),
+            "active_icd_groups": engine.get("active_icd_groups", []),
+            "vital_signs": engine.get("vital_signs"),
+            "risk_factors": engine.get("risk_factors"),
+            "baseline_labs": engine.get("baseline_labs"),
+            "score2_applicability": engine.get("score2_applicability"),
+            "antithrombotic_priority": engine.get("antithrombotic_priority"),
+        },
+    }
+
+
 class ChatRequest(BaseModel):
     question: str
     ho_so_text: str  # Toàn bộ text hồ sơ làm context
@@ -913,7 +1099,7 @@ async def ecg_digitize(request: EcgDigitizeRequest):
         )
     result = ecg_engine.digitize_ecg_image(img)
     calib = ecg_engine.estimate_px_per_mm(img)
-    r_peaks = ecg_engine.detect_r_peaks(result["signal"])
+    r_peaks = ecg_engine.detect_r_peaks(result["signal"], px_per_mm=calib["px_per_mm"])
     heart_rate = ecg_engine.compute_heart_rate(r_peaks["rr_intervals_px"], calib["px_per_mm"])
     return {
         "success": True,
@@ -946,7 +1132,7 @@ async def ecg_synthetic_test(heart_rate_bpm: float = 75.0):
         raise HTTPException(status_code=500, detail="Không tạo được ảnh test.")
     result = ecg_engine.digitize_ecg_image(img)
     calib = ecg_engine.estimate_px_per_mm(img)
-    r_peaks = ecg_engine.detect_r_peaks(result["signal"])
+    r_peaks = ecg_engine.detect_r_peaks(result["signal"], px_per_mm=calib["px_per_mm"])
     heart_rate = ecg_engine.compute_heart_rate(r_peaks["rr_intervals_px"], calib["px_per_mm"])
     return {
         "success": True,

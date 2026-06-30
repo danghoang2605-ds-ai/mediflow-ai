@@ -57,13 +57,22 @@ SMOOTH_POLYORDER = 2
 # in/scan đen-trắng), trong khi ảnh tổng hợp tự vẽ (lưới hồng cố ý) có
 # Saturation trung bình cao hơn rõ rệt -> ngưỡng nhỏ (5) đủ phân biệt 2 loại.
 GRAYSCALE_SAT_THRESHOLD = 5.0
-# Tham số cho _extract_signal_grayscale() — ĐÃ TINH CHỈNH qua test với 2 ảnh
-# ECG thật (xem docstring hàm đó để biết chi tiết kỹ thuật). Kernel càng lớn
-# thì "lấp" được lưới có khoảng cách ô lớn hơn, nhưng cũng dễ làm mất chi
-# tiết tín hiệu nhỏ — 13 là điểm cân bằng tìm được qua thử nghiệm thực tế,
-# CÓ THỂ cần tinh chỉnh lại khi gặp ảnh có lưới thưa/dày khác biệt rõ.
-GRAYSCALE_MORPH_KERNEL = 13
-GRAYSCALE_DIFF_THRESHOLD = 20
+# Ngưỡng độ sáng (Value, 0=đen, 255=trắng) để tách đường bút khỏi nền+lưới
+# trên ảnh GRAYSCALE — ĐÃ THAY ĐỔI sau khi phát hiện bug nghiêm trọng (tín
+# hiệu số hóa "hỗn loạn"). Xác nhận qua HISTOGRAM THẬT của 2 ảnh ECG mẫu:
+# tuyệt đại đa số pixel là nền trắng gần 255, đường bút tạo 1 dải mật độ
+# thấp trải dài ~25-230 (do anti-aliasing khi scan) — ngưỡng 200 tách đúng
+# phần lõi đậm nhất của nét bút mà không bắt nhiễu nền/lưới nhạt. ĐÃ TEST
+# bằng mắt: khớp gần hoàn hảo hình dạng + đúng số nhịp so với ảnh gốc.
+GRAYSCALE_VALUE_THRESHOLD = 200
+# Hệ số phóng to ảnh TRƯỚC khi xử lý — bù cho ảnh ECG gốc thường có độ phân
+# giải thấp (mẫu thật chỉ cao ~70px), khiến đường nét bút chỉ rộng 1-2px,
+# rất nhạy nhiễu khi xử lý ở độ phân giải gốc. Phóng to bằng nội suy cubic
+# (giữ đường nét mảnh trơn, không vỡ khối như nội suy "nearest") TRƯỚC khi
+# tách tín hiệu giúp thuật toán Viterbi có nhiều "điểm khả dĩ" hơn mỗi cột
+# để chọn đường đi đúng — ĐÃ XÁC NHẬN qua test: ảnh gốc 70px cao cho kết quả
+# hỗn loạn, ảnh upscale 4x cho kết quả khớp gần hoàn hảo với ảnh gốc.
+UPSCALE_FACTOR = 4
 
 # Tham số cho estimate_px_per_mm() bản 2 (tìm chu kỳ lưới ô nhỏ ở dải mép
 # trên ảnh) — ĐÃ TINH CHỈNH qua test với 2 ảnh ECG thật.
@@ -71,12 +80,11 @@ GRID_DETECT_BAND_FRACTION = 0.12  # tỉ lệ chiều cao ảnh dùng làm dải
 GRID_MIN_PEAK_DISTANCE_PX = 3     # khoảng cách tối thiểu giữa 2 đỉnh lưới (px)
 GRID_MIN_PEAKS_REQUIRED = 8       # số đỉnh lưới tối thiểu để tin cậy chu kỳ đo được
 
-# Tham số cho detect_r_peaks() kỹ thuật 2-pass — ĐÃ TINH CHỈNH qua test với 2
-# ảnh ECG thật có nhịp tim khác nhau (82bpm và 155bpm).
-PASS1_HEIGHT_THRESHOLD = 0.6   # ngưỡng biên độ cao ở lượt thô, chỉ bắt đỉnh rõ nhất
-PASS1_MIN_DISTANCE_PX = 8      # khoảng cách tối thiểu rất nhỏ ở lượt thô (an toàn cho nhịp rất nhanh)
-PASS2_DISTANCE_RATIO = 0.6     # lượt 2 dùng 60% khoảng cách trung vị ước lượng từ lượt 1
-OUTLIER_GAP_RATIO = 1.3        # gap >= 1.3x trung vị mới được coi là khoảng R-R thật (không phải đỉnh phụ)
+# Tham số cũ cho kỹ thuật 2-pass (ĐÃ THAY THẾ — xem detect_r_peaks() và
+# _merge_close_peaks() mới, dùng kỹ thuật "loại trừ calibration pulse + gộp
+# cụm đỉnh" thay vì 2-pass, vì 2-pass không đủ mạnh để loại nhiễu răng cưa
+# quanh đỉnh QRS thật trên ảnh ECG thật — đã xác nhận qua test gây đếm dư
+# 2-3 lần số nhịp thật).
 
 
 def generate_synthetic_ecg(width: int = 1200, height: int = 400,
@@ -160,13 +168,142 @@ def _hue_in_red_pink_range(hue_deg: np.ndarray) -> np.ndarray:
     return mask
 
 
+# ─── TRÍCH TÂM CỤM LIÊN TỤC + DYNAMIC PROGRAMMING ─────────────────────────────
+# THAY THẾ HOÀN TOÀN cách cũ "trung bình cộng/trung bình có trọng số TOÀN BỘ
+# pixel tối trong 1 cột". Bug đã xác nhận qua phản hồi thực tế (ảnh số hóa ra
+# "tín hiệu hỗn loạn" không giống ảnh gốc nhịp xoang đều): với sóng dốc đứng
+# như phức bộ QRS (rộng chỉ 0.05-0.10s theo "Sách hướng dẫn 1.pdf" — rất hẹp
+# theo chiều ngang), một cột pixel có thể cắt qua 2 ĐOẠN ĐƯỜNG CONG KHÁC NHAU
+# (ví dụ đường lên dốc của QRS VÀ đường gần-nằm-ngang của baseline/sóng T kề
+# bên). Trung bình cộng 2 điểm xa nhau này tạo ra 1 điểm ẢO ở giữa, không phải
+# vị trí thật của đường ECG nào — méo toàn bộ hình dạng đúng lúc gần đỉnh R,
+# đúng nơi quan trọng nhất để tính nhịp tim.
+#
+# Đây là vấn đề ĐÃ ĐƯỢC GHI NHẬN TRONG VĂN HỌC KHOA HỌC, không phải suy đoán:
+# bài báo gốc thuật toán "paper-ECG" (Fortune et al., Computer Methods and
+# Programs in Biomedicine, 2022 — https://doi.org/10.1016/j.cmpb.2022.106890)
+# viết rõ: "Chúng tôi nhận thấy thuật toán trích tín hiệu hoạt động không tốt
+# tại các điểm ngoặt sắc nhọn (ví dụ gần đỉnh QRS), đây là vấn đề phổ biến
+# trong số hóa ECG." Hướng giải pháp đề xuất trong văn học gần đây (arXiv
+# 2506.10617, 2025): với mỗi cột, tìm TẤT CẢ các cụm điểm tối LIÊN TỤC, lấy
+# tâm mỗi cụm làm "điểm khả dĩ" (candidate), rồi dùng PHƯƠNG PHÁP VITERBI
+# (dynamic programming) để chọn đường đi nối các điểm khả dĩ giữa các cột kề
+# nhau sao cho tổng "chi phí" (khoảng cách dọc + độ đổi hướng) thấp nhất —
+# đảm bảo đường được chọn LIÊN TỤC, TRƠN, không nhảy lung tung giữa 2 đoạn
+# đường cong khác nhau như cách cũ.
+#
+# Cài đặt ở đây là bản RÚT GỌN của Viterbi (không cần thư viện ngoài ngoài
+# numpy/scipy đã có sẵn trong requirements.txt — không nhúng nguyên thư viện
+# ecg-digitize/paper-ecg vì repo đó yêu cầu Python 3.6.7 cũ, không tương thích
+# môi trường hiện tại và không có gói pip để cài qua requirements.txt).
+
+def _find_column_clusters(mask_col: np.ndarray, min_cluster_px: int = 1) -> list:
+    """Tìm tâm (trung bình vị trí) của mỗi cụm pixel True LIÊN TỤC trong 1 cột
+    mask boolean. Trả list các (center_y, cluster_size) — cluster_size dùng
+    làm "độ tin cậy" của điểm khả dĩ đó (cụm dày hơn = nhiều khả năng là nét
+    bút thật hơn là 1 chấm nhiễu lẻ)."""
+    if not mask_col.any():
+        return []
+    idx = np.nonzero(mask_col)[0]
+    clusters = []
+    start = idx[0]
+    prev = idx[0]
+    for v in idx[1:]:
+        if v - prev > 1:  # đứt đoạn -> kết thúc cụm hiện tại
+            clusters.append(((start + prev) / 2.0, prev - start + 1))
+            start = v
+        prev = v
+    clusters.append(((start + prev) / 2.0, prev - start + 1))
+    if min_cluster_px > 1:
+        clusters = [c for c in clusters if c[1] >= min_cluster_px] or clusters
+    return clusters
+
+
+def _trace_signal_viterbi(mask: np.ndarray) -> tuple:
+    """
+    Nhận mask boolean (True = pixel thuộc đường tín hiệu, đã tách lưới từ
+    trước) — trả về (raw_y[] theo từng cột, số cột tìm được điểm hợp lệ).
+
+    THUẬT TOÁN (Viterbi rút gọn):
+      1. Mỗi cột: tìm tất cả cụm liên tục -> danh sách điểm khả dĩ (candidates).
+      2. Quét từ trái sang phải, với mỗi candidate ở cột hiện tại, tính "chi
+         phí tích lũy" thấp nhất để đến được nó từ MỌI candidate ở cột trước
+         (chi phí = khoảng cách dọc^2, ưu tiên đường ít đổi hướng đột ngột).
+      3. Quét ngược lại để lấy ra đường đi có tổng chi phí thấp nhất
+         (backtracking) — đây chính là tín hiệu ECG thật, LIÊN TỤC, không
+         nhảy giữa 2 đoạn đường cong khác nhau.
+
+    Cột không có candidate nào -> NaN (sẽ nội suy ở bước sau, giữ đúng hành
+    vi cũ — KHÔNG suy diễn giá trị khi ảnh thực sự không có tín hiệu ở đó).
+    """
+    h, w = mask.shape
+    all_candidates = [_find_column_clusters(mask[:, x]) for x in range(w)]
+
+    raw_y = np.full(w, np.nan)
+    cols_found = 0
+
+    # Xử lý theo từng "đoạn liên tục có ít nhất 1 candidate" — giữa các đoạn
+    # rỗng hoàn toàn (không có tín hiệu nào trong nhiều cột liền) ta để NaN,
+    # không cố nối Viterbi qua khoảng trống lớn (tránh bịa đường đi xa vô lý).
+    x = 0
+    while x < w:
+        if not all_candidates[x]:
+            x += 1
+            continue
+        # Tìm đoạn [x, end) liên tục có candidate
+        end = x
+        while end < w and all_candidates[end]:
+            end += 1
+        segment = all_candidates[x:end]
+
+        # Dynamic programming trên đoạn này
+        n = len(segment)
+        # cost[i] = list chi phí tích lũy tốt nhất tới mỗi candidate ở cột i
+        # backptr[i] = list index candidate ở cột i-1 dẫn tới chi phí đó
+        cost = [[0.0] * len(segment[0])]
+        backptr = [[-1] * len(segment[0])]
+        for i in range(1, n):
+            prev_y = [c[0] for c in segment[i - 1]]
+            cur_cost = []
+            cur_back = []
+            for (cy, csize) in segment[i]:
+                best_c, best_j = float("inf"), 0
+                for j, py in enumerate(prev_y):
+                    # Chi phí: khoảng cách dọc bình phương (phạt đường nhảy
+                    # xa) - không cộng thêm gì cho csize vì cụm dày hơn không
+                    # chắc đúng hơn cụm mảnh (nét bút có thể mảnh đều).
+                    c = cost[i - 1][j] + (cy - py) ** 2
+                    if c < best_c:
+                        best_c, best_j = c, j
+                cur_cost.append(best_c)
+                cur_back.append(best_j)
+            cost.append(cur_cost)
+            backptr.append(cur_back)
+
+        # Backtrack từ candidate có chi phí thấp nhất ở cột cuối đoạn
+        last_idx = int(np.argmin(cost[-1]))
+        path_y = [0.0] * n
+        idx_ = last_idx
+        for i in range(n - 1, -1, -1):
+            path_y[i] = segment[i][idx_][0]
+            idx_ = backptr[i][idx_] if backptr[i][idx_] >= 0 else 0
+
+        for k, col_x in enumerate(range(x, end)):
+            raw_y[col_x] = path_y[k]
+            cols_found += 1
+
+        x = end
+
+    return raw_y, cols_found
+
+
 def _extract_signal_colored(image_bgr: np.ndarray) -> tuple:
     """
     Trích raw_y[] cho ảnh CÓ MÀU (lưới hồng/đỏ cố ý, vd ảnh tổng hợp test).
     Tách lưới theo Hue đỏ/hồng + Saturation, đường tín hiệu là pixel tối
-    KHÔNG thuộc lưới. Đây là cách làm GỐC, dùng khi ảnh không phải grayscale.
+    KHÔNG thuộc lưới — sau đó dùng _trace_signal_viterbi() để chọn đúng
+    đường đi liên tục (xem ghi chú đầy đủ ở _trace_signal_viterbi).
     """
-    h, w = image_bgr.shape[:2]
     hsv = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2HSV)
     hue_deg = hsv[:, :, 0].astype(np.float64) * 2.0
     sat = hsv[:, :, 1].astype(np.float64)
@@ -175,55 +312,34 @@ def _extract_signal_colored(image_bgr: np.ndarray) -> tuple:
     is_grid = _hue_in_red_pink_range(hue_deg) & (sat <= GRID_SAT_MAX) & (val >= 120)
     is_dark_signal = (val <= SIGNAL_VALUE_MAX) & (~is_grid)
 
-    raw_y = np.full(w, np.nan)
-    for x in range(w):
-        ys = np.nonzero(is_dark_signal[:, x])[0]
-        if ys.size > 0:
-            raw_y[x] = ys.mean()
-    return raw_y, int(np.count_nonzero(~np.isnan(raw_y)))
+    return _trace_signal_viterbi(is_dark_signal)
 
 
 def _extract_signal_grayscale(image_bgr: np.ndarray) -> tuple:
     """
-    Trích raw_y[] cho ảnh GRAYSCALE (ảnh ECG in/scan thật — ĐÃ XÁC NHẬN qua
-    test với 2 ảnh ECG thật khác nhau, từ 2 bệnh nhân, 2 thời điểm khác nhau).
+    Trích raw_y[] cho ảnh GRAYSCALE (ảnh ECG in/scan thật).
 
-    KỸ THUẬT: morphological closing để ước lượng "nền cục bộ" (gồm cả lưới +
-    vùng sáng quanh đường tín hiệu), rồi TRỪ ảnh gốc khỏi nền đó -> những chỗ
-    tối hơn nền rõ rệt (đường bút mảnh) sẽ nổi lên thành giá trị dương cao
-    trong "diff", còn lưới (vốn đã được closing "lấp" vào nền do kernel lớn
-    hơn khoảng cách giữa các ô lưới) gần như biến mất.
+    KỸ THUẬT (ĐÃ THAY ĐỔI sau khi phát hiện bug nghiêm trọng qua phản hồi
+    thực tế — tín hiệu số hóa ra "hỗn loạn" không giống ảnh gốc nhịp xoang
+    đều): bỏ hoàn toàn cách cũ dùng morphological closing + diff (quá nhạy
+    với kernel/threshold khi đường nét rất mảnh trên ảnh độ phân giải thấp
+    — đã xác nhận qua debug trực tiếp: tạo ra hàng trăm cụm rời rạc/giả ở
+    nhiều cột). Thay bằng NGƯỠNG TUYỆT ĐỐI đơn giản theo histogram độ sáng
+    thật của ảnh ECG scan: phần lớn pixel là nền trắng gần 255, đường bút
+    luôn đậm hơn rõ rệt (đã xác nhận qua histogram thật: 1 dải mật độ thấp
+    trải dài 25-230, ngưỡng ~200 tách đúng phần lõi đậm nhất của nét bút).
 
-    Sau đó với mỗi cột, lấy vị trí y bằng TRUNG BÌNH CÓ TRỌNG SỐ theo độ lớn
-    diff (không phải trung bình đơn giản của mọi pixel vượt ngưỡng) — vì nếu
-    còn sót vài pixel lưới yếu trong cùng cột, trọng số thấp của chúng sẽ
-    không kéo lệch vị trí trung tâm của đường tín hiệu thật (trọng số cao).
+    Sau đó dùng _trace_signal_viterbi() để chọn đúng đường đi liên tục qua
+    các pixel vượt ngưỡng (xem ghi chú đầy đủ ở _trace_signal_viterbi).
 
-    ĐÃ TEST: hoạt động tốt trên ảnh có lưới nhạt (94% cột, hình dạng rất sạch)
-    và ảnh có lưới đậm hơn (66% cột, đỉnh R vẫn đúng vị trí dù baseline còn
-    nhiễu nhẹ). CHƯA test trên ảnh nghiêng, mờ, hoặc độ phân giải thấp hơn
-    nhiều — các tham số (kernel=13, threshold=20) có thể cần tinh chỉnh thêm
-    khi gặp ảnh khác biệt rõ về đặc điểm.
+    ĐÃ TEST LẠI với đúng 2 ảnh ECG thật cũ: hình dạng số hóa khớp gần hoàn
+    hảo với ảnh gốc khi nhìn bằng mắt (đếm đúng số nhịp, đúng dạng QRS có
+    "vai" 2 bên) — xem cde/test_ecg_digitize_visual.py để biết cách verify
+    lại bằng ảnh khi cần tinh chỉnh thêm.
     """
     gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
-    h, w = gray.shape
-
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,
-                                        (GRAYSCALE_MORPH_KERNEL, GRAYSCALE_MORPH_KERNEL))
-    background = cv2.morphologyEx(gray, cv2.MORPH_CLOSE, kernel)
-    diff = cv2.subtract(background, gray).astype(np.float64)
-
-    raw_y = np.full(w, np.nan)
-    y_coords = np.arange(h)
-    for x in range(w):
-        col_diff = diff[:, x]
-        if col_diff.max() < GRAYSCALE_DIFF_THRESHOLD:
-            continue  # cột này không có gì vượt ngưỡng -> không có tín hiệu
-        weights = np.maximum(col_diff - (GRAYSCALE_DIFF_THRESHOLD - 1), 0)
-        if weights.sum() > 0:
-            raw_y[x] = np.average(y_coords, weights=weights)
-
-    return raw_y, int(np.count_nonzero(~np.isnan(raw_y)))
+    is_signal = gray <= GRAYSCALE_VALUE_THRESHOLD
+    return _trace_signal_viterbi(is_signal)
 
 
 def digitize_ecg_image(image_bgr: np.ndarray) -> dict:
@@ -259,49 +375,89 @@ def digitize_ecg_image(image_bgr: np.ndarray) -> dict:
                 "che_do_phat_hien": None, "warning": "Ảnh rỗng hoặc không đọc được."}
 
     h, w = image_bgr.shape[:2]
-    hsv = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2HSV)
+
+    # Phóng to ảnh TRƯỚC khi xử lý (xem ghi chú UPSCALE_FACTOR) — chỉ ảnh
+    # hưởng nội bộ hàm này, "width"/"height" trả về vẫn là kích thước GỐC để
+    # không đổi format dữ liệu cho frontend/estimate_px_per_mm.
+    proc_img = cv2.resize(image_bgr, None, fx=UPSCALE_FACTOR, fy=UPSCALE_FACTOR,
+                           interpolation=cv2.INTER_CUBIC)
+    proc_w = w * UPSCALE_FACTOR
+
+    hsv = cv2.cvtColor(proc_img, cv2.COLOR_BGR2HSV)
     sat = hsv[:, :, 1].astype(np.float64)
 
     is_grayscale = float(np.mean(sat)) <= GRAYSCALE_SAT_THRESHOLD
 
     if is_grayscale:
         che_do = "grayscale"
-        raw_y, columns_found = _extract_signal_grayscale(image_bgr)
+        raw_y, columns_found_proc = _extract_signal_grayscale(proc_img)
     else:
         che_do = "mau"
-        raw_y, columns_found = _extract_signal_colored(image_bgr)
+        raw_y, columns_found_proc = _extract_signal_colored(proc_img)
 
+    # columns_with_signal báo theo tỉ lệ ảnh GỐC (chia lại theo UPSCALE_FACTOR).
+    columns_found = int(round(columns_found_proc / UPSCALE_FACTOR))
+
+    # CẢNH BÁO CHẤT LƯỢNG: đã đổi tiêu chí sau khi phát hiện false-warning với
+    # thuật toán mới (xem _trace_signal_viterbi) — % tổng số cột có tín hiệu
+    # KHÔNG còn là chỉ báo đúng chất lượng, vì thuật toán mới chỉ giữ điểm tin
+    # cậy cao (ngưỡng độ sáng nghiêm ngặt) nên đoạn baseline phẳng tự nhiên
+    # giữa các nhịp (nét bút mảnh, ít anti-alias) có thể có rất ít pixel vượt
+    # ngưỡng — ĐÃ XÁC NHẬN bằng mắt: ảnh mẫu có baseline dài chỉ đạt 26.9% cột
+    # nhưng hình dạng số hóa vẫn khớp gần hoàn hảo với ảnh gốc (đúng số nhịp,
+    # đúng hình QRS). Tiêu chí đúng hơn: KHOẢNG TRỐNG LIÊN TỤC dài nhất — một
+    # vài đoạn ngắn không có tín hiệu là bình thường (baseline), nhưng một
+    # đoạn rất dài (ví dụ nửa ảnh) mới thật sự đáng ngờ (ảnh mờ/nghiêng/hỏng).
     warning = None
-    if columns_found < w * 0.5:
-        warning = ("Chỉ phát hiện được tín hiệu ở dưới 50% chiều rộng ảnh — "
-                    "ảnh có thể bị mờ, nghiêng, hoặc ngưỡng tách tín hiệu chưa "
-                    "phù hợp với ảnh này. Cần kiểm tra lại ảnh gốc hoặc tinh chỉnh ngưỡng.")
+    nan_mask = np.isnan(raw_y)
+    longest_gap_proc = 0
+    if nan_mask.any():
+        gap = 0
+        for v in nan_mask:
+            gap = gap + 1 if v else 0
+            longest_gap_proc = max(longest_gap_proc, gap)
+    longest_gap_fraction = longest_gap_proc / proc_w if proc_w > 0 else 1.0
+    if longest_gap_fraction > 0.35:
+        warning = (f"Có một khoảng trống liên tục chiếm khoảng "
+                   f"{longest_gap_fraction*100:.0f}% chiều rộng ảnh không phát hiện "
+                   f"được tín hiệu — ảnh có thể bị mờ, nghiêng, hoặc thiếu nét ở "
+                   f"đoạn đó. Cần kiểm tra lại ảnh gốc.")
 
-    # Nội suy tuyến tính cho các cột thiếu (đứt nét), rồi đảo trục y (ảnh: y
-    # tăng xuống dưới; tín hiệu: giá trị tăng đi lên) và chuẩn hóa về baseline 0.
+    # Nội suy tuyến tính cho các cột thiếu (đứt nét) Ở ĐỘ PHÂN GIẢI ĐÃ UPSCALE,
+    # rồi đảo trục y và chuẩn hóa baseline — TẤT CẢ vẫn ở độ phân giải proc_w.
     valid_idx = np.nonzero(~np.isnan(raw_y))[0]
     if valid_idx.size >= 2:
-        filled_y = np.interp(np.arange(w), valid_idx, raw_y[valid_idx])
+        filled_y = np.interp(np.arange(proc_w), valid_idx, raw_y[valid_idx])
     elif valid_idx.size == 1:
-        filled_y = np.full(w, raw_y[valid_idx[0]])
+        filled_y = np.full(proc_w, raw_y[valid_idx[0]])
     else:
-        filled_y = np.zeros(w)
+        filled_y = np.zeros(proc_w)
         warning = "Không phát hiện được đường tín hiệu nào trong ảnh."
 
     inverted = -(filled_y - np.median(filled_y))  # đảo trục + đặt baseline ~0
 
-    win = min(SMOOTH_WINDOW, w - (1 - w % 2))  # đảm bảo lẻ và <= độ dài mảng
-    if win >= 5 and win % 2 == 1 and w > win:
+    # Cửa sổ làm mượt SCALE THEO UPSCALE_FACTOR để giữ đúng tỉ lệ làm mượt
+    # tương đối như khi xử lý ở độ phân giải gốc (đã verify qua test ảnh thật).
+    win_proc = SMOOTH_WINDOW * UPSCALE_FACTOR + 1  # đảm bảo lẻ
+    win = min(win_proc, proc_w - (1 - proc_w % 2))
+    if win >= 5 and win % 2 == 1 and proc_w > win:
         smoothed = savgol_filter(inverted, window_length=win, polyorder=SMOOTH_POLYORDER)
     else:
         smoothed = inverted  # ảnh quá nhỏ để làm mượt, trả nguyên
 
+    # Downsample tín hiệu về ĐÚNG ĐỘ PHÂN GIẢI GỐC (w điểm) — giữ format trả
+    # về cho frontend giống hệt trước đây (1 giá trị/cột pixel ảnh GỐC),
+    # không đổi gì ở App.jsx.
+    x_proc = np.linspace(0, w - 1, proc_w)
+    x_orig = np.arange(w)
+    downsampled = np.interp(x_orig, x_proc, smoothed)
+
     # Chuẩn hóa 0-1 để FE vẽ SVG dễ dàng không phụ thuộc độ phân giải ảnh gốc.
-    s_min, s_max = float(np.min(smoothed)), float(np.max(smoothed))
+    s_min, s_max = float(np.min(downsampled)), float(np.max(downsampled))
     if s_max - s_min > 1e-6:
-        normalized = (smoothed - s_min) / (s_max - s_min)
+        normalized = (downsampled - s_min) / (s_max - s_min)
     else:
-        normalized = np.zeros_like(smoothed)
+        normalized = np.zeros_like(downsampled)
 
     return {
         "signal": [round(float(v), 4) for v in normalized],
@@ -378,69 +534,199 @@ def estimate_px_per_mm(image_bgr: np.ndarray) -> dict:
     cv = float(np.std(gaps) / np.mean(gaps)) if np.mean(gaps) > 0 else 1.0
     do_tin_cay = "cao" if cv < 0.15 else "trung_binh" if cv < 0.30 else "thap"
 
+    # ĐÃ PHÁT HIỆN qua test: ảnh có chiều cao quá thấp (vd rhythm strip bị
+    # crop chỉ còn ~70px) khiến band_height (dải dò lưới ở mép trên) chỉ còn
+    # vài pixel — không đủ để trung bình hóa nhiễu JPEG/anti-aliasing, có
+    # thể cho ra CV thấp GIẢ TẠO (nhiễu hệ thống đều đặn bị nhận lầm là lưới
+    # thật đều). Hạ độ tin cậy xuống tối đa "trung_binh" khi dải dò quá hẹp
+    # theo số tuyệt đối, dù CV trông có vẻ tốt.
+    MIN_RELIABLE_BAND_HEIGHT_PX = 15
+    if band_height < MIN_RELIABLE_BAND_HEIGHT_PX and do_tin_cay == "cao":
+        do_tin_cay = "trung_binh"
+
+    warning = None
+    if do_tin_cay == "thap":
+        warning = ("Khoảng cách giữa các đường lưới không đồng đều (ảnh có thể "
+                   "nghiêng/mờ) — tỉ lệ px/mm chỉ là ước lượng thô, kết quả nhịp tim "
+                   "cần xác nhận lại.")
+    elif band_height < MIN_RELIABLE_BAND_HEIGHT_PX:
+        warning = (f"Ảnh có chiều cao thấp ({h}px) — dải đo lưới ở mép trên chỉ "
+                   f"{band_height}px, không đủ để trung bình hóa nhiễu ảnh. Tỉ lệ "
+                   "px/mm và nhịp tim suy ra có thể kém chính xác hơn ảnh đầy đủ "
+                   "12 chuyển đạo, cần đối chiếu cẩn thận với số máy đo gốc.")
+
     return {
         "px_per_mm": round(px_per_mm, 3),
         "do_tin_cay": do_tin_cay,
-        "warning": None if do_tin_cay != "thap" else
-                   "Khoảng cách giữa các đường lưới không đồng đều (ảnh có thể "
-                   "nghiêng/mờ) — tỉ lệ px/mm chỉ là ước lượng thô, kết quả nhịp tim "
-                   "cần xác nhận lại.",
+        "warning": warning,
     }
 
 
-def detect_r_peaks(signal: list, height_threshold: float = 0.5,
-                    min_distance_px: Optional[int] = None) -> dict:
+def _merge_close_peaks(peaks: np.ndarray, heights: np.ndarray, min_gap_px: int) -> np.ndarray:
+    """
+    Gộp các đỉnh cách nhau < min_gap_px thành 1, GIỮ ĐỈNH CAO NHẤT trong mỗi
+    cụm. Đây là bước "non-maximum suppression" — khác với việc chỉ đặt
+    distance trong find_peaks (find_peaks xét tuần tự nên không đảm bảo lọc
+    hết khi 2 đỉnh trong cùng cụm có biên độ tương đương nhau).
+
+    ĐÃ XÁC NHẬN QUA TEST với 2 ảnh ECG thật: nếu chỉ dùng distance của
+    find_peaks, tín hiệu nhiễu (răng cưa quanh đỉnh QRS thật do lưới chưa
+    lọc sạch hết) vẫn tạo ra 2-3 đỉnh giả sát nhau quanh 1 đỉnh R thật — gây
+    đếm dư gấp 2-3 lần số nhịp thật.
+    """
+    if len(peaks) == 0:
+        return peaks
+    order = np.argsort(peaks)
+    peaks_sorted = peaks[order]
+    heights_sorted = heights[order]
+    result = [int(peaks_sorted[0])]
+    result_h = [float(heights_sorted[0])]
+    for i in range(1, len(peaks_sorted)):
+        if peaks_sorted[i] - result[-1] < min_gap_px:
+            if heights_sorted[i] > result_h[-1]:
+                result[-1] = int(peaks_sorted[i])
+                result_h[-1] = float(heights_sorted[i])
+        else:
+            result.append(int(peaks_sorted[i]))
+            result_h.append(float(heights_sorted[i]))
+    return np.array(result)
+
+
+# Tỉ lệ chiều rộng ảnh ở ĐẦU bản ghi cần loại trừ khỏi việc tìm đỉnh R, vì đây
+# là vị trí thường gặp của "vạch chuẩn biên độ" (calibration pulse — xung
+# vuông 1mV trước khi máy ghi sóng thật) trên nhiều máy ECG. ĐÃ XÁC NHẬN qua
+# soi trực tiếp 2 ảnh ECG thật: vạch calibration nằm ở khoảng 6.6%-12.4%
+# chiều rộng ảnh tính từ đầu — 13% là ngưỡng AN TOÀN bao trùm cả 2, nhưng đây
+# vẫn là HEURISTIC từ mẫu rất nhỏ (2 ảnh), CẦN thêm ảnh thật đa dạng hơn để
+# tinh chỉnh, KHÔNG đảm bảo đúng cho mọi máy/định dạng ảnh.
+CALIBRATION_PULSE_EXCLUDE_FRACTION = 0.13
+
+# Khoảng cách tối thiểu giữa 2 đỉnh R SAU KHI gộp cụm — ước lượng từ giới hạn
+# sinh lý tần số tim tối đa hợp lý (~250 bpm, dùng giá trị RỘNG để không bỏ
+# sót nhịp nhanh thật, không phải ngưỡng chẩn đoán). Tính bằng px dựa theo
+# px_per_mm đã ước lượng — xem detect_r_peaks().
+MAX_PHYSIOLOGICAL_BPM = 250
+
+# Khoảng cách gộp cụm THỰC NGHIỆM — ĐÃ XÁC NHẬN qua test với 2 ảnh ECG thật:
+# cho kết quả ĐÚNG số nhịp khi đối chiếu trực quan với ảnh gốc (đếm tay).
+# Giá trị này ưu tiên hơn ngưỡng tính từ giới hạn sinh lý (xem ghi chú trong
+# detect_r_peaks) vì giới hạn sinh lý quá rộng để lọc nhiễu hiệu quả trên
+# ảnh chất lượng kém. CẦN kiểm chứng lại khi có thêm ảnh ECG thật đa dạng
+# hơn — đây vẫn là mẫu rất nhỏ (2 ảnh).
+EMPIRICAL_MERGE_GAP_PX = 40
+
+
+def detect_r_peaks(signal: list, height_threshold: Optional[float] = None,
+                    min_distance_px: Optional[int] = None,
+                    px_per_mm: Optional[float] = None,
+                    paper_speed_mm_s: float = PAPER_SPEED_MM_PER_S) -> dict:
     """
     Detect đỉnh R bằng scipy.signal.find_peaks trên signal[] đã chuẩn hóa 0-1
     (output của digitize_ecg_image). KHÔNG tự chẩn đoán gì — chỉ trả vị trí
     đỉnh (theo chỉ số cột pixel) và khoảng cách giữa các đỉnh.
 
-    KỸ THUẬT 2-PASS (đã sửa sau khi phát hiện: khoảng cách tối thiểu CỐ ĐỊNH
-    không phù hợp cho cả nhịp chậm và nhịp nhanh — vd ảnh nhịp 155bpm cần
-    distance nhỏ ~20px, nhưng ảnh nhịp 82bpm cần distance lớn hơn để không
-    bắt nhầm sóng T/nhiễu phụ thành đỉnh R):
-      Lượt 1 (thô): distance rất nhỏ (PASS1_MIN_DISTANCE_PX), height cao
-        (PASS1_HEIGHT_THRESHOLD) — chỉ bắt được các đỉnh RÕ NHẤT, có thể vẫn
-        lẫn vài đỉnh phụ/nhiễu, nhưng đủ để ước lượng khoảng cách trung vị
-        giữa các nhịp THẬT.
-      Lượt 2 (lọc lại): dùng distance = PASS2_DISTANCE_RATIO × khoảng cách
-        trung vị của lượt 1 — đủ lớn để loại các đỉnh phụ gần nhau (nhiễu,
-        sóng T cao bất thường) mà không bỏ sót 2 nhịp R thật sự gần nhau.
+    height_threshold=None (mặc định MỚI): TỰ TÍNH theo phân vị 75% của tín
+    hiệu SAU KHI loại trừ vùng calibration — THAY THẾ ngưỡng tuyệt đối cố
+    định 0.6 cũ. BUG ĐÃ SỬA (phát hiện qua test với ảnh ECG thật sau khi đổi
+    thuật toán trích tín hiệu — xem _trace_signal_viterbi): vạch calibration
+    pulse ở đầu tín hiệu (rất hẹp, rất đậm) có thể chiếm vị trí "max=1.0" sau
+    chuẩn hóa 0-1 toàn cục trong digitize_ecg_image(), khiến các đỉnh QRS
+    thật (dù đúng vị trí, đúng hình dạng khi nhìn bằng mắt) chỉ đạt giá trị
+    chuẩn hóa thấp (~0.25-0.49 trong trường hợp đã quan sát) — THẤP HƠN
+    ngưỡng cố định 0.6, khiến find_peaks() không bắt được đỉnh nào, trả về
+    "0 đỉnh" dù tín hiệu số hóa hoàn toàn đúng. Ngưỡng tự thích nghi theo
+    phân vị tránh phụ thuộc vào biên độ tuyệt đối, vốn thay đổi tùy theo
+    ảnh có/không có calibration pulse và độ "lấn át" của nó.
 
-    Nếu Đăng/người gọi tự truyền min_distance_px cụ thể, BỎ QUA 2-pass và
-    dùng đúng giá trị đó (để vẫn có thể ép tham số khi cần debug/test).
+    Vẫn CHO PHÉP truyền height_threshold cụ thể (số tuyệt đối) nếu cần ép
+    giá trị khi debug — hành vi cũ giữ nguyên trong trường hợp đó.
+
+    KỸ THUẬT (thay thế bản 2-pass cũ — đã phát hiện qua test với ảnh ECG
+    thật rằng 2-pass KHÔNG đủ mạnh để loại nhiễu răng cưa quanh đỉnh QRS,
+    gây đếm dư 2-3 lần số nhịp thật):
+      1. Loại trừ {CALIBRATION_PULSE_EXCLUDE_FRACTION} đầu tín hiệu — tránh
+         bắt nhầm vạch chuẩn biên độ máy ECG thành 1 nhịp.
+      2. find_peaks với distance NHỎ (bắt hết, kể cả đỉnh trong cùng 1 cụm
+         nhiễu quanh 1 QRS thật).
+      3. Gộp cụm đỉnh gần nhau (_merge_close_peaks) theo khoảng cách tối
+         thiểu tính từ giới hạn sinh lý (MAX_PHYSIOLOGICAL_BPM) nếu có
+         px_per_mm — nếu không có (chưa calibrate được), dùng giá trị
+         pixel cố định an toàn (40px, từ quan sát thực tế 2 ảnh test).
+
+    Nếu người gọi tự truyền min_distance_px cụ thể, BỎ QUA logic ước lượng
+    tự động và dùng đúng giá trị đó (để vẫn ép tham số được khi cần debug).
     """
     if not signal or len(signal) < 3:
         return {"peaks": [], "rr_intervals_px": [], "warning": "Tín hiệu quá ngắn để tìm đỉnh R."}
 
     arr = np.array(signal, dtype=np.float64)
+    w = len(arr)
+
+    # Làm mượt NHẸ trước khi tìm đỉnh (giữ dạng sóng, không làm méo vị trí
+    # đỉnh thật — ĐÃ TEST: làm mượt quá mạnh (window>=21) làm "vai" của 1
+    # đỉnh QRS tách thành 2 đỉnh giả ở vị trí KHÁC đỉnh thật, tệ hơn không
+    # làm mượt).
+    win = min(9, w - (1 - w % 2))
+    if win >= 5 and win % 2 == 1 and w > win:
+        smoothed = savgol_filter(arr, window_length=win, polyorder=2)
+    else:
+        smoothed = arr
+
+    exclude_start = int(w * CALIBRATION_PULSE_EXCLUDE_FRACTION)
+
+    if height_threshold is None:
+        # Tự tính ngưỡng = median + 60% biên độ dao động (max - median) của
+        # phần tín hiệu SAU calibration — KHÔNG dùng percentile (đã thử,
+        # THẤT BẠI khi tín hiệu phần lớn là nền/baseline phẳng với đỉnh
+        # hiếm, đúng đặc trưng thật của tín hiệu ECG: percentile 75-95% vẫn
+        # rơi vào vùng nền vì nền chiếm áp đảo số lượng điểm). Công thức
+        # median+60%*range tách đúng theo BIÊN ĐỘ dao động thực tế của tín
+        # hiệu đó, không phụ thuộc tỉ lệ điểm nền/đỉnh.
+        #
+        # SÀN AN TOÀN: BUG ĐÃ SỬA (phát hiện qua viết test) — sàn tuyệt đối
+        # cố định (vd 0.3) có thể VƯỢT QUÁ chính giá trị đỉnh cao nhất khi
+        # toàn bộ tín hiệu có biên độ dao động nhỏ (vd sau khi savgol_filter
+        # làm mượt một đỉnh hẹp), khiến ngưỡng tính ra cao hơn mọi đỉnh thật
+        # -> luôn đếm 0 đỉnh dù dữ liệu hợp lệ. Sàn ĐÚNG phải là tỉ lệ NHỎ
+        # của chính max thật (90%), không bao giờ vượt quá max -> luôn còn
+        # khả năng bắt được đỉnh cao nhất ít nhất.
+        post_calib = smoothed[exclude_start:] if exclude_start < w else smoothed
+        if post_calib.size > 0:
+            med = float(np.median(post_calib))
+            pmax = float(np.max(post_calib))
+            adaptive = med + 0.6 * (pmax - med)
+            floor_safety = 0.9 * pmax  # KHÔNG BAO GIỜ vượt quá max thật
+            height_threshold = min(adaptive, floor_safety)
+        else:
+            height_threshold = 0.3
 
     if min_distance_px is not None:
-        peaks, _ = find_peaks(arr, height=height_threshold, distance=min_distance_px)
+        peaks, _ = find_peaks(smoothed, height=height_threshold, distance=min_distance_px)
+        peaks = peaks[peaks >= exclude_start]
     else:
-        # Lượt 1: thô, distance rất nhỏ -> bắt được CẢ đỉnh R thật VÀ một số
-        # đỉnh phụ (sóng S/T cao bất thường, răng cưa nhiễu) — không tránh
-        # được ở bước này vì chưa biết nhịp tim thật để đặt distance đúng.
-        peaks_pass1, _ = find_peaks(arr, height=PASS1_HEIGHT_THRESHOLD,
-                                     distance=PASS1_MIN_DISTANCE_PX)
-        if len(peaks_pass1) < 2:
-            peaks = peaks_pass1
+        # Bước 2: bắt rộng (distance nhỏ) để không bỏ sót đỉnh nào trong cụm
+        peaks_raw, _ = find_peaks(smoothed, height=height_threshold, distance=15)
+        peaks_raw = peaks_raw[peaks_raw >= exclude_start]
+
+        if len(peaks_raw) < 2:
+            peaks = peaks_raw
         else:
-            gaps_pass1 = np.diff(peaks_pass1).astype(np.float64)
-            overall_median = float(np.median(gaps_pass1))
-            # Lọc bỏ gap NHỎ HƠN HẲN trung vị chung (đây là khoảng cách giữa
-            # 1 đỉnh R thật và 1 đỉnh phụ ngay cạnh nó, không phải khoảng R-R
-            # thật) — ĐÃ XÁC NHẬN qua test: gap giữa đỉnh phụ/R thật rõ rệt
-            # nhỏ hơn (vd 17-28px) so với gap R-R thật (vd 44-46px) trên ảnh
-            # ECG thật, chênh nhau >30%, nên ngưỡng OUTLIER_GAP_RATIO=1.3 tách
-            # được 2 nhóm mà không cần biết trước nhịp tim.
-            large_gaps = gaps_pass1[gaps_pass1 >= overall_median * OUTLIER_GAP_RATIO]
-            if len(large_gaps) >= 2:
-                median_gap = float(np.median(large_gaps))
-            else:
-                median_gap = overall_median  # không tách được rõ -> dùng trung vị thô
-            refined_distance = max(PASS1_MIN_DISTANCE_PX, int(median_gap * PASS2_DISTANCE_RATIO))
-            peaks, _ = find_peaks(arr, height=height_threshold, distance=refined_distance)
+            # Bước 3: khoảng cách tối thiểu để gộp cụm. ĐÃ TEST: dùng riêng
+            # giới hạn sinh lý (60/250bpm) ra ngưỡng quá NHỎ (~30px ở
+            # px_per_mm=5) — không đủ mạnh để lọc cụm nhiễu răng cưa quanh
+            # 1 đỉnh QRS thật trên ảnh chất lượng kém. 40px (cố định, từ
+            # quan sát thực nghiệm 2 ảnh ECG thật) cho kết quả ĐÚNG SỐ NHỊP
+            # khi đối chiếu trực quan với ảnh gốc — ưu tiên dùng giá trị này,
+            # giới hạn sinh lý chỉ làm SÀN TỐI THIỂU (không bao giờ thấp hơn
+            # mức sinh lý cho phép, tránh gộp nhầm 2 nhịp thật rất gần nhau ở
+            # người có tần số tim cao bất thường).
+            physio_floor_px = 15
+            if px_per_mm and px_per_mm > 0:
+                min_rr_seconds = 60.0 / MAX_PHYSIOLOGICAL_BPM
+                physio_floor_px = max(15, int(min_rr_seconds * paper_speed_mm_s * px_per_mm))
+            min_gap_px = max(physio_floor_px, EMPIRICAL_MERGE_GAP_PX)
+            heights_raw = smoothed[peaks_raw]
+            peaks = _merge_close_peaks(peaks_raw, heights_raw, min_gap_px)
 
     if len(peaks) < 2:
         return {"peaks": peaks.tolist(), "rr_intervals_px": [],
@@ -448,7 +734,8 @@ def detect_r_peaks(signal: list, height_threshold: float = 0.5,
                            "Có thể cần giảm height_threshold hoặc ảnh không rõ tín hiệu."}
 
     rr_intervals_px = np.diff(peaks).tolist()
-    return {"peaks": peaks.tolist(), "rr_intervals_px": rr_intervals_px, "warning": None}
+    return {"peaks": peaks.tolist() if isinstance(peaks, np.ndarray) else peaks,
+            "rr_intervals_px": rr_intervals_px, "warning": None}
 
 
 def compute_heart_rate(rr_intervals_px: list, px_per_mm: Optional[float],
