@@ -2067,10 +2067,10 @@ function triggerPrint(r, mode, docNote, bookmarks, analysis) {
   const clinicalBody = `<h2>I. Chẩn đoán</h2><div class="row"><span class="lbl">Chẩn đoán chính:</span><span>${r.chan_doan_chinh}</span></div><div class="row"><span class="lbl">Lý do nhập viện:</span><span>${r.ly_do_vao_vien}</span></div><div class="row"><span class="lbl">Tiền sử:</span><span>${r.tien_su_benh}</span></div>
 <h2>II. Phẫu thuật</h2><table><tr><th>Ngày</th><th>Phương pháp</th><th>Kết quả</th></tr><tr><td>${r.phau_thuat.ngay}</td><td>${r.phau_thuat.phuong_phap}</td><td>${r.phau_thuat.ket_qua}</td></tr></table><div class="row"><span class="lbl">Phẫu thuật viên:</span><span>${r.phau_thuat.bac_si_phau_thuat}</span></div>
 <h2>III. Xét nghiệm</h2><table><tr><th>Chỉ số</th><th>Kết quả</th><th>BT</th><th>Đánh giá</th></tr>${(r.xet_nghiem_key||r.xet_nghiem_meta||[]).map(m=>`<tr><td>${m.key} (${m.desc})</td><td>${m.val}</td><td>${m.normal}</td><td>${m.status==="high"?"Cao":m.status==="low"?"Thấp":"BT"}</td></tr>`).join("")}</table>
-<h2>IV. Diễn biến</h2><table><tr><th style="width:80pt">Ngày</th><th style="width:70pt">Loại</th><th>Mô tả</th></tr>${r.dien_bien_lam_sang.map(ev=>`<tr><td>${ev.ngay}</td><td>${ev.loai==="canh_bao"?"Cảnh báo":ev.loai==="bat_thuong"?"Bất thường":"BT"}</td><td>${ev.mo_ta}</td></tr>`).join("")}</table>
+<h2>IV. Diễn biến</h2><table><tr><th style="width:80pt">Ngày</th><th style="width:70pt">Loại</th><th>Mô tả</th></tr>${(r.dien_bien_lam_sang||[]).map(ev=>`<tr><td>${ev.ngay}</td><td>${ev.loai==="canh_bao"?"Cảnh báo":ev.loai==="bat_thuong"?"Bất thường":"BT"}</td><td>${ev.mo_ta}</td></tr>`).join("")}</table>
 <h2>V. Siêu âm tim (${(r.sieu_am_tim?.lan_kham||[]).length} lượt)</h2><table><tr><th>Ngày</th><th>EF</th><th>Chênh áp</th><th>Kết luận</th></tr>${(r.sieu_am_tim?.lan_kham||[]).map(s=>`<tr><td>${s.ngay}${s.latest?" (gần nhất)":""}</td><td>${s.ef!=null?s.ef+"%":"-"}</td><td>${s.grad_max!=null?s.grad_max+(s.grad_tb!=null?"/"+s.grad_tb:"")+" mmHg":"-"}</td><td>${s.ghi_chu||s.chan_doan||""}</td></tr>`).join("")}</table>
-<h2>VI. Thuốc</h2><table><tr><th>Tên thuốc</th><th>Liều</th><th>Cách dùng</th></tr>${r.thuoc_cuoi_ky.map(t=>`<tr><td>${t.ten_thuoc}</td><td>${t.lieu}</td><td>${t.cach_dung}</td></tr>`).join("")}</table>
-<h2>VII. Cảnh báo</h2>${r.canh_bao_nguy_co.map(c=>`<div class="alert"><div class="al">[${c.muc_do==="cao"?"ƯU TIÊN CAO":c.muc_do==="trung_binh"?"Trung bình":"Theo dõi"}] ${c.mo_ta}</div><div class="as">Căn cứ: ${c.can_cu}</div></div>`).join("")}
+<h2>VI. Thuốc</h2><table><tr><th>Tên thuốc</th><th>Liều</th><th>Cách dùng</th></tr>${(r.thuoc_cuoi_ky||[]).map(t=>`<tr><td>${t.ten_thuoc}</td><td>${t.lieu}</td><td>${t.cach_dung}</td></tr>`).join("")}</table>
+<h2>VII. Cảnh báo</h2>${(r.canh_bao_nguy_co||[]).map(c=>`<div class="alert"><div class="al">[${c.muc_do==="cao"?"ƯU TIÊN CAO":c.muc_do==="trung_binh"?"Trung bình":"Theo dõi"}] ${c.mo_ta}</div><div class="as">Căn cứ: ${c.can_cu}</div></div>`).join("")}
 ${(()=>{const{findings,egfr,ctx}=runPriorityScreens(r);const s=checkDrugSafety(r.thuoc_cuoi_ky,egfr,ctx);const act=findings.filter(f=>f.muc!=="stable").sort((a,b)=>TIER_ORDER[a.muc]-TIER_ORDER[b.muc]);let h="<h2>VIII. Phân tầng ưu tiên lâm sàng</h2>";h+=act.map(f=>`<div class="alert"><div class="al">[${TIER_META[f.muc].label}] ${f.ten}</div><div class="as">${f.ly_do} — Nguồn: ${f.nguon}</div></div>`).join("")||"<p>Không có cảnh báo cần xử trí ngay.</p>";h+=`<h2>IX. Kiểm tra an toàn đơn thuốc</h2><p>Chức năng thận: eGFR ${egfr} mL/phút/1.73m2 (CKD-EPI 2021).</p>`;if(s.interactions.length)h+="<table><tr><th>Cặp thuốc</th><th>Mức</th><th>Hậu quả</th><th>Đề xuất</th></tr>"+s.interactions.map(it=>`<tr><td>${it.thuoc_a} + ${it.thuoc_b}</td><td>${TIER_META[it.muc].label}</td><td>${it.hau_qua}</td><td>${it.de_xuat}</td></tr>`).join("")+"</table>";if(s.favorable.length)h+="<p>Phù hợp khuyến cáo: "+s.favorable.map(f=>`${f.thuoc} (${f.nguon})`).join("; ")+"</p>";return h})()}
 ${riskScoresPrintBlock}
 ${ttrPrintBlock}
@@ -5211,8 +5211,11 @@ function ReportTab({ report: r, analysis }) {
 
       {/* PHÂN TÍCH: Thuốc */}
       <Card id="sec-meds" title="Đơn thuốc và lịch dùng" icon={<Icon.Pill d={16}/>}>
+        {(r.thuoc_cuoi_ky||[]).length===0 ? (
+          <div className="lab-empty">Hồ sơ không ghi nhận thông tin thuốc.</div>
+        ) : (
         <div className="grid2">
-          {r.thuoc_cuoi_ky.map((t,i)=>{
+          {(r.thuoc_cuoi_ky||[]).map((t,i)=>{
             const st = drugStatus(t, phaseInfo)
             return (
             <div key={i} className="med-item">
@@ -5230,6 +5233,7 @@ function ReportTab({ report: r, analysis }) {
             </div>
           )})}
         </div>
+        )}
         <MedGantt meds={r.thuoc_cuoi_ky}/>
       </Card>
 
